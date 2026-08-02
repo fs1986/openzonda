@@ -26,6 +26,8 @@ htmlcov/
 coverage.xml
 
 # --- Empaquetado Windows ---
+# Generado por packaging/openzonda.spec desde el tag de git en cada build.
+apps/openzonda/_build_info.py
 *.msi
 *.wixobj
 *.wixpdb

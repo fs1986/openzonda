@@ -141,7 +141,7 @@ Parser TLV puro (bytes → dataclass), sin dependencias, ubicado en packages/wif
 - El blob crudo de IEs siempre se persiste (columna bss.ies BLOB): permite re-parsear históricos cuando el parser mejore — los datos capturados nunca caducan.
 
 ## 4.5 Fixtures y estrategia de test
-- Herramienta wsa-capture (CLI incluida en el repo): ejecuta el flujo de captura y serializa cada WLAN_BSS_ENTRY crudo a JSON (metadatos + blob base64). Es también la herramienta que los colegas ejecutarán para aportar fixtures de sus NICs con un solo comando.
+- Herramienta oz-capture (CLI incluida en el repo): ejecuta el flujo de captura y serializa cada WLAN_BSS_ENTRY crudo a JSON (metadatos + blob base64). Es también la herramienta que los colegas ejecutarán para aportar fixtures de sus NICs con un solo comando.
 - Golden tests: cada fixture tiene su parsing esperado versionado; CI corre el parser contra todos los fixtures sin necesitar radio.
 - Property tests (hypothesis): el parser nunca lanza excepción con bytes arbitrarios; nunca lee fuera del blob.
 - Tests de struct: sizeof/offsets de cada estructura ctypes verificados.
@@ -170,7 +170,7 @@ Parser TLV puro (bytes → dataclass), sin dependencias, ubicado en packages/wif
 ## 5.2 Lanzamiento de la alpha privada (plan concreto)
 - Seleccionar 3–5 colegas con perfiles distintos: al menos uno usuario de una suite comercial de referencia (para el gap analysis más duro), uno con NICs variadas, uno que haga surveys reales de campo.
 - Kit de alpha: MSI + guía de 1 página (instalar, permiso de ubicación, primer survey) + link a GitHub Discussions privado del repo.
-- Pedido explícito a cada uno: (a) ejecutar wsa-capture y subir el fixture de su NIC; (b) un survey real de ≥ 30 puntos; (c) responder 5 preguntas fijas (qué faltó para usarlo en un trabajo real, qué dato no les creyeron, etc.).
+- Pedido explícito a cada uno: (a) ejecutar oz-capture y subir el fixture de su NIC; (b) un survey real de ≥ 30 puntos; (c) responder 5 preguntas fijas (qué faltó para usarlo en un trabajo real, qué dato no les creyeron, etc.).
 - Ciclo quincenal: release alpha nueva + changelog orientado a ellos; los issues de colegas se etiquetan field-feedback y tienen prioridad de triage.
 - Salida de F3: tabla pública HARDWARE.md iniciada con las NICs validadas y sus particularidades de RSSI.
 

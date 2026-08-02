@@ -348,9 +348,9 @@ proyecto.wifisurvey  (ZIP)
 - Idempotencia: reejecutar el instalador repara/actualiza sin duplicar accesos; UpgradeCode estable, MajorUpgrade configurado.
 - Preflight: arquitectura x64, versión de Windows, espacio en disco.
 - Separación estricta binarios/datos: nunca proyectos en Program Files.
-%LOCALAPPDATA%\Programs\WiFiSurveyAI\   # binarios (per-user)
-%LOCALAPPDATA%\WiFiSurveyAI\{logs,cache}\
-%APPDATA%\WiFiSurveyAI\settings.json
+%LOCALAPPDATA%\Programs\OpenZonda\   # binarios (per-user)
+%LOCALAPPDATA%\OpenZonda\{logs,cache}\
+%APPDATA%\OpenZonda\settings.json
 Proyectos: carpetas elegidas por el usuario
 - Upgrade: preserva settings y jamás toca proyectos; migración de settings versionada.
 - Desinstalación: elimina binarios, shortcuts y registro; diálogo explícito con dos opciones — conservar datos/configuración (default) o eliminar todo — y la elección queda registrada en el log de desinstalación.
@@ -358,7 +358,7 @@ Proyectos: carpetas elegidas por el usuario
 
 # 19. Observabilidad y diagnóstico
 - Logging estructurado (JSON lines) con niveles configurables; rotación por tamaño (10 MB × 5).
-- Taxonomía de errores con códigos estables (WSA-xxxx) usados en UI, logs y documentación — cada mensaje de error de UI enlaza a su página de troubleshooting.
+- Taxonomía de errores con códigos estables (OZD-xxxx) usados en UI, logs y documentación — cada mensaje de error de UI enlaza a su página de troubleshooting. Se usa el prefijo `OZD-` y no `OZ-` para no colisionar con las claves de tarjeta del proyecto Jira (`OZ-N`).
 - Bundle de diagnóstico exportable: versión, capacidades del scanner, estado del permiso de ubicación, adaptadores, últimos logs, sin datos de survey salvo inclusión explícita.
 - Métricas locales de performance (tiempos de scan, render, interpolación) visibles en un panel de desarrollador oculto (Ctrl+Shift+D).
 

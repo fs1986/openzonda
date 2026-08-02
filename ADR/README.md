@@ -16,5 +16,6 @@ ADR" del diseño (§25) y son vinculantes para todos los agentes (ver `CLAUDE.md
 | [005](ADR-005-captura-native-wifi.md) | Captura vía Native Wi-Fi API con parsing propio de IEs | Aceptado |
 | [006](ADR-006-honestidad-metrologica.md) | Honestidad metrológica como invariante de producto | Aceptado |
 | [007](ADR-007-binding-ctypes.md) | Binding a `wlanapi.dll` mediante `ctypes` | Aceptado |
+| [008](ADR-008-composition-root.md) | Composition root en un paquete propio | Aceptado |
 
 Para proponer una decisión nueva, copia [`template.md`](template.md).
