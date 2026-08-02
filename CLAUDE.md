@@ -14,7 +14,7 @@
 
 Aplicación desktop \*\*open source\*\* (Apache-2.0) para \*\*site surveys WiFi\*\* en Windows
 
-10/11, con ambición de paridad progresiva con Ekahau en survey pasivo, heatmapping y
+10/11, con ambición de paridad progresiva con las herramientas comerciales de referencia en survey pasivo, heatmapping y
 
 diseño predictivo — \*\*sin hardware propietario\*\* en el caso base.
 
@@ -30,7 +30,7 @@ Documentos fuente (monorepo `openzonda`, leer antes de decidir):
 
 \- `ADR/` — decisiones de arquitectura (inmutables)
 
-\- Los `.docx` originales quedan en `docs/design/source/` (no editar; editar los `.md`)
+\- Los `.md` de `docs/design/` son la fuente de verdad. Los `.docx` originales se conservan solo en local (`.private/`, fuera del repo por metadatos personales).
 
 
 
@@ -178,7 +178,7 @@ Cada sesión = 1 tarjeta Jira (`OPENZONDA-N`) = 1 rama `feature/openzonda-N-slug
 
 \*\*Escalado ★ → opus\*\* en el líder de implementación solo en: contenedor `.wifisurvey`,
 
-bindings ctypes + flujo de notificaciones, parser de IEs, RF engine e import `.esx`.
+bindings ctypes + flujo de notificaciones, parser de IEs, RF engine e importador de proyectos de terceros.
 
 No fijar `CLAUDE\_CODE\_SUBAGENT\_MODEL` global (pisaría esta matriz).
 

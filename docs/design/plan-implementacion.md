@@ -34,7 +34,7 @@ Actualizar campos en Word (Ctrl+A, F9).
 | F3 | Survey engine + ALPHA PRIVADA | Sem 19–26 | Sem 10–13 | Survey de 50 puntos en site real; 3 colegas usando |
 | F4 | Heatmaps + reporting | Sem 27–34 | Sem 14–18 | Reporte PDF profesional presentable a un cliente |
 | F5 | RF predictivo | Sem 35–42 | Sem 19–23 | Error medio ≤ 6 dB en 2 sites de referencia |
-| F6 | Analytics + import .esx + BETA PÚBLICA | Sem 43–52 | Sem 24–29 | Import de .esx real; anuncio público |
+| F6 | Analytics + import de terceros + BETA PÚBLICA | Sem 43–52 | Sem 24–29 | Import de proyectos de terceros real; anuncio público |
 | F7 | Optimización de APs | Sem 53–58 | Sem 30–33 | Sugerencias justificadas y reproducibles |
 | F8 | IA advisory local-first | Sem 59–64 | Sem 34–37 | Cero llamadas de red sin consentimiento (verificado) |
 | F9 | Hardening + docs → 1.0 | Sem 65–72 | Sem 38–42 | NFRs verdes; 2+ maintainers; release 1.0 |
@@ -168,7 +168,7 @@ Parser TLV puro (bytes → dataclass), sin dependencias, ubicado en packages/wif
 | F3.6 | Atajos de terreno: barra espaciadora = re-capturar, Z = deshacer último punto | Survey operable con una mano |
 
 ## 5.2 Lanzamiento de la alpha privada (plan concreto)
-- Seleccionar 3–5 colegas con perfiles distintos: al menos uno usuario de Ekahau (para el gap analysis más duro), uno con NICs variadas, uno que haga surveys reales de campo.
+- Seleccionar 3–5 colegas con perfiles distintos: al menos uno usuario de una suite comercial de referencia (para el gap analysis más duro), uno con NICs variadas, uno que haga surveys reales de campo.
 - Kit de alpha: MSI + guía de 1 página (instalar, permiso de ubicación, primer survey) + link a GitHub Discussions privado del repo.
 - Pedido explícito a cada uno: (a) ejecutar wsa-capture y subir el fixture de su NIC; (b) un survey real de ≥ 30 puntos; (c) responder 5 preguntas fijas (qué faltó para usarlo en un trabajo real, qué dato no les creyeron, etc.).
 - Ciclo quincenal: release alpha nueva + changelog orientado a ellos; los issues de colegas se etiquetan field-feedback y tienen prioridad de triage.
@@ -186,9 +186,9 @@ Parser TLV puro (bytes → dataclass), sin dependencias, ubicado en packages/wif
 - log_distance v1 → multi_wall v1 (COST 231 MWM); golden fixtures sintéticos + validación empírica contra 2 surveys reales de F3/F4; publicar el error obtenido en docs (transparencia = credibilidad).
 - Colocación manual de APs virtuales con tx power/antena → heatmap predictivo etiquetado como PREDICTIVO en cada export.
 
-## F6 — Analytics, import .esx y beta pública
+## F6 — Analytics, import de proyectos de terceros y beta pública
 - Co-channel/adjacent interference, roaming candidates, capacidad heurística (QBSS + PHY + solape) — cada resultado con su explicación metodológica embebida.
-- Importador .esx best-effort con reporte de fidelidad (qué se importó, qué se ignoró); fixtures de ≥ 2 versiones de Ekahau aportadas por el colega usuario de Ekahau.
+- Importador de proyectos de terceros best-effort con reporte de fidelidad (qué se importó, qué se ignoró); fixtures de ≥ 2 versiones del formato aportadas por un colega usuario de la herramienta.
 - Beta pública: anuncio (blog propio + r/wifi + LinkedIn), README con GIF de demo, docs site MkDocs publicado, plantilla de issue 'hardware report'.
 
 ## F7 — Optimización de APs
@@ -208,7 +208,7 @@ Parser TLV puro (bytes → dataclass), sin dependencias, ubicado en packages/wif
 | --- | --- | --- |
 | F0 | Nadie (repo público desde el día 1 igualmente) | Repo público con README de visión: 'building in public' sin promoción |
 | F3 | 3–5 colegas seleccionados | Alpha privada (§5.2); Discussions como canal |
-| F4–F5 | Círculo ampliado (~15 profesionales) | Alpha abierta por invitación; primeros posts técnicos en el blog (la serie 'construyendo un Ekahau open source' es contenido de altísimo valor para tu blog de ciberseguridad/infra) |
+| F4–F5 | Círculo ampliado (~15 profesionales) | Alpha abierta por invitación; primeros posts técnicos en el blog (una serie 'construyendo un site survey WiFi open source' es contenido de altísimo valor para tu blog de ciberseguridad/infra) |
 | F6 | Público | Beta + anuncio; Good First Issues curados; HARDWARE.md como página viva |
 | F9 | Público + potenciales sponsors | 1.0 + OpenCollective/GitHub Sponsors para financiar certificado de firma y hardware de test |
 
@@ -216,7 +216,7 @@ Parser TLV puro (bytes → dataclass), sin dependencias, ubicado en packages/wif
 - El reporte declara metodología y hardware — pueden defenderlo ante su cliente.
 - El error del modelo predictivo está publicado, no oculto.
 - Releases firmadas con checksums, changelog honesto, issues respondidos.
-- Import .esx: pueden probar sin abandonar su herramienta actual.
+- Import de proyectos de terceros: pueden probar sin abandonar su herramienta actual.
 - La clasificación observado/derivado/predictivo es visible en cada pantalla y export.
 
 # 8. Gestión del plan

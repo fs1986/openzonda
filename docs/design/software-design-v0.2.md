@@ -18,31 +18,31 @@ Plataforma open source de site survey WiFi de nivel profesional para Windows 10/
 | Versión | Fecha | Cambios |
 | --- | --- | --- |
 | 0.1 | 01-08-2026 | Baseline inicial: arquitectura, packaging, criterios v0.1 |
-| 0.2 | 02-08-2026 | Posicionamiento competitivo; restricciones físicas de captura en Windows (permisos de ubicación, throttling, ausencia de monitor mode); parsing de Information Elements; especificación de interpolación y modelos RF; interoperabilidad .esx; concurrencia; supply chain; NFRs medibles; gobernanza OSS; ADR-003 a ADR-006; riesgos |
+| 0.2 | 02-08-2026 | Posicionamiento competitivo; restricciones físicas de captura en Windows (permisos de ubicación, throttling, ausencia de monitor mode); parsing de Information Elements; especificación de interpolación y modelos RF; interoperabilidad con formatos de terceros; concurrencia; supply chain; NFRs medibles; gobernanza OSS; ADR-003 a ADR-006; riesgos |
 
 # Tabla de contenidos
 Nota: actualizar campos en Word (Ctrl+A, F9) para poblar la tabla.
 
 # 1. Resumen ejecutivo
-WiFi Survey AI es una aplicación desktop open source para site surveys WiFi en Windows, con ambición de alcanzar paridad funcional progresiva con herramientas comerciales como Ekahau AI Pro y Hamina en el segmento de survey pasivo, heatmapping y diseño predictivo, sin requerir hardware propietario para el caso de uso base.
-La estrategia de producto se apoya en tres pilares: (1) honestidad metrológica — el sistema distingue siempre entre dato observado, derivado e interpolado, y declara explícitamente las limitaciones físicas de la captura con NICs consumer; (2) arquitectura hexagonal con núcleo RF determinista, versionado y testeable por regresión; (3) extensibilidad plugin-first, incluyendo interoperabilidad con formatos de la industria (importación Ekahau .esx) como palanca de adopción.
+WiFi Survey AI es una aplicación desktop open source para site surveys WiFi en Windows, con ambición de alcanzar paridad funcional progresiva con las herramientas comerciales de referencia en el segmento de survey pasivo, heatmapping y diseño predictivo, sin requerir hardware propietario para el caso de uso base.
+La estrategia de producto se apoya en tres pilares: (1) honestidad metrológica — el sistema distingue siempre entre dato observado, derivado e interpolado, y declara explícitamente las limitaciones físicas de la captura con NICs consumer; (2) arquitectura hexagonal con núcleo RF determinista, versionado y testeable por regresión; (3) extensibilidad plugin-first, incluyendo interoperabilidad con formatos de proyecto de terceros como palanca de adopción.
 El MVP (v0.1 funcional) entrega: gestión de proyectos, calibración de planos, captura pasiva vía Windows Native Wi-Fi API, survey stop-and-go, heatmaps de RSSI/cobertura y exportación básica. Las fases posteriores agregan motor predictivo multi-wall, análisis de canal/capacidad, optimización de APs e IA advisory local-first.
 
 # 2. Posicionamiento y análisis competitivo
-Para diseñar un producto 'comparable con Ekahau' es necesario ser preciso sobre qué se puede igualar por software y qué depende de hardware dedicado. La siguiente matriz define el posicionamiento honesto del producto:
+Para posicionar el producto es necesario ser preciso sobre qué se puede igualar por software y qué depende de hardware dedicado. La siguiente matriz define el posicionamiento honesto del producto:
 
 | Producto | Fortaleza | Limitación relevante | Posición de WiFi Survey AI |
 | --- | --- | --- | --- |
-| Ekahau AI Pro + Sidekick 2 | Medición multi-radio calibrada, spectrum analysis, ecosistema completo | Coste elevado, hardware propietario, cerrado | No competimos en spectrum analysis hardware; competimos en survey pasivo, predictivo y reporting con coste cero |
-| Hamina | Diseño predictivo cloud, UX moderna | Cloud-first, suscripción | Alternativa offline-first y open source para predictivo |
-| NetSpot | Survey pasivo accesible en Win/macOS | Motor RF simple, extensibilidad limitada | Superar en rigor RF, modelo de datos y extensibilidad |
-| Acrylic WiFi Heatmaps | Survey Windows con GPS | Cerrado, motor predictivo básico | Paridad en captura + superioridad en apertura y análisis |
-| Kismet / herramientas OSS | Captura avanzada multi-plataforma | No orientado a site survey con planos ni heatmaps profesionales | Complementario; posible fuente de datos vía plugin |
+| Suite comercial con hardware dedicado | Medición multi-radio calibrada, spectrum analysis, ecosistema completo | Coste elevado, hardware propietario, cerrado | No competimos en spectrum analysis hardware; competimos en survey pasivo, predictivo y reporting con coste cero |
+| Plataforma predictiva cloud | Diseño predictivo cloud, UX moderna | Cloud-first, suscripción | Alternativa offline-first y open source para predictivo |
+| App de survey pasivo multiplataforma | Survey pasivo accesible en Win/macOS | Motor RF simple, extensibilidad limitada | Superar en rigor RF, modelo de datos y extensibilidad |
+| Herramienta de heatmaps para Windows | Survey Windows con GPS | Cerrado, motor predictivo básico | Paridad en captura + superioridad en apertura y análisis |
+| Herramientas OSS de captura | Captura avanzada multiplataforma | No orientado a site survey con planos ni heatmaps profesionales | Complementario; posible fuente de datos vía plugin |
 
 ## 2.1 Diferenciadores de diseño
 - Trazabilidad metrológica total: cada píxel de un heatmap puede rastrearse hasta las muestras que lo originaron, con distancia a la muestra más cercana y algoritmo de interpolación usado.
 - Motor RF versionado con tests de regresión: los resultados predictivos son reproducibles bit a bit para un mismo (input, versión de modelo).
-- Interoperabilidad de entrada: importación de proyectos Ekahau .esx (contenedor ZIP con JSON) para reducir el coste de cambio de los usuarios profesionales.
+- Interoperabilidad de entrada: importación de proyectos de terceros (contenedor ZIP con JSON) para reducir el coste de cambio de los usuarios profesionales.
 - Extracción de Information Elements (IEs) de beacons vía Native Wi-Fi API: capacidades 802.11n/ac/ax/be, ancho de canal, BSS Load (recuento de estaciones y utilización de canal QBSS), MU-MIMO/OFDMA — habilita análisis de capacidad sin monitor mode.
 - Open source con gobernanza seria: DCO, semver, ADRs públicos, releases firmadas y reproducibles con SBOM.
 
@@ -88,7 +88,7 @@ Este capítulo existe para que ninguna decisión de producto contradiga la físi
 
 | Restricción | Realidad técnica | Implicación de diseño |
 | --- | --- | --- |
-| RSSI no calibrado | Cada NIC/driver reporta RSSI con offsets y curvas distintas; no equivale a un Sidekick multi-radio calibrado | Perfil de adaptador con offset configurable; los reportes declaran el adaptador usado; opción de calibración relativa por el usuario |
+| RSSI no calibrado | Cada NIC/driver reporta RSSI con offsets y curvas distintas; no equivale a un instrumento multi-radio calibrado | Perfil de adaptador con offset configurable; los reportes declaran el adaptador usado; opción de calibración relativa por el usuario |
 | Throttling de escaneo | WlanScan está limitado por el OS (~4 s por interfaz) y puede degradarse si la NIC está asociada y con tráfico | Cadencia de muestreo objetivo 3–5 s; el survey engine no promete tasas mayores; timestamps por muestra |
 | Escaneo parcial en conexión | Una NIC asociada puede escanear solo canales parciales para no interrumpir tráfico | Recomendar survey con NIC desconectada; advertencia en UI si está asociada |
 | Sin noise floor | El stack WLAN de Windows no expone noise en la práctica totalidad de drivers consumer | SNR se marca como 'no disponible' salvo driver que lo soporte; nunca se estima noise y se presenta como medido |
@@ -164,7 +164,7 @@ wifi-survey-ai/
     heatmap/               # interpolación y render
     analytics/             # canal, capacidad, roaming
     reporting/             # PDF/HTML/CSV/GeoJSON
-    interop/               # importadores (.esx) / exportadores
+    interop/               # importadores de terceros / exportadores
     ai/                    # advisory layer (opcional)
     persistence/           # SQLite, migraciones, .wifisurvey
   native/windows/          # adaptador Native WiFi (ctypes/pybind)
@@ -302,7 +302,7 @@ proyecto.wifisurvey  (ZIP)
 
 | Formato | Dirección | Fase | Notas |
 | --- | --- | --- | --- |
-| Ekahau .esx | Import | F6 | ZIP con JSONs; se importan planos, APs, muros y surveys en modo best-effort con reporte de fidelidad |
+| Proyecto de terceros | Import | F6 | ZIP con JSONs; se importan planos, APs, muros y surveys en modo best-effort con reporte de fidelidad |
 | CSV / JSON | Export | MVP | Muestras crudas y resultados; schema JSON publicado |
 | GeoJSON | Export | F4 | Geometría y muestras georreferenciables |
 | PDF / HTML | Export | F4 | Reporting con plantillas; heatmaps con leyenda y metadatos de sesión |
@@ -434,7 +434,7 @@ Release tag:   clean build → smoke test VM Win10 22H2 + Win11
 | F3 | Survey session: stop-and-go + validación + perfiles de adaptador | Survey de 50 puntos completado en site real de prueba |
 | F4 | Heatmaps profesionales + máscara de confianza + reporting PDF/HTML | NFR de render cumplido; export con leyenda y metadatos |
 | F5 | RF engine predictivo (log-distance → multi-wall) + validación empírica | Error medio ≤ 6 dB en 2 sites de referencia |
-| F6 | Analytics (canal/capacidad/roaming) + import .esx + survey continuo | Import .esx de proyecto real con reporte de fidelidad |
+| F6 | Analytics (canal/capacidad/roaming) + import de proyectos de terceros + survey continuo | Import de proyecto de terceros real con reporte de fidelidad |
 | F7 | Optimización de APs (posicionamiento/canal/potencia sugeridos) | Sugerencias reproducibles y justificadas contra analytics |
 | F8 | IA advisory local-first opcional | Cero llamadas de red sin consentimiento verificado en test |
 | F9 | Hardening, docs, gobernanza → Release 1.0 | Todos los NFRs verdes; docs completas; 2 maintainers activos |
@@ -446,9 +446,9 @@ Release tag:   clean build → smoke test VM Win10 22H2 + Win11
 | Variabilidad de RSSI entre NICs mina la credibilidad | Alta | Alto | Perfiles de adaptador + lista de hardware validado + declaración explícita en reportes (§5) |
 | Endurecimiento futuro de permisos WLAN en Windows | Media | Alto | health() + onboarding adaptable; seguimiento de releases de Windows en CI con VMs Insider |
 | SmartScreen bloquea instaladores sin firma | Alta | Medio | Documentación clara; roadmap de certificado OV; reputación progresiva |
-| Alcance excesivo (comparación con Ekahau completa) | Alta | Alto | No-alcance explícito (§3.2) y roadmap por fases con criterios de salida |
+| Alcance excesivo (paridad completa con suites comerciales) | Alta | Alto | No-alcance explícito (§3.2) y roadmap por fases con criterios de salida |
 | Fatiga de maintainer (proyecto unipersonal) | Media | Alto | Gobernanza temprana, docs de contribución de calidad, issues 'good first issue' curados |
-| Cambio de formato .esx por Ekahau | Media | Bajo | Import best-effort con reporte de fidelidad; tests con fixtures de múltiples versiones |
+| Cambio del formato de terceros por su fabricante | Media | Bajo | Import best-effort con reporte de fidelidad; tests con fixtures de múltiples versiones |
 
 # 28. Architecture Decision Records
 

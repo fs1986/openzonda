@@ -34,6 +34,9 @@ packaging/windows/bin/
 # --- Proyectos de survey generados (nunca versionar datos de usuario) ---
 *.wifisurvey
 
+# --- Material privado local (originales .docx con metadatos personales, notas) ---
+.private/
+
 # --- IDE / OS ---
 .idea/
 .vscode/

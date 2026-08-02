@@ -8,7 +8,7 @@
 
 OpenZonda es una aplicación desktop para **survey pasivo, heatmapping y diseño
 predictivo** de redes WiFi, con la ambición de una paridad progresiva con
-herramientas comerciales como Ekahau — usando cualquier NIC con driver WLAN
+las herramientas comerciales de referencia — usando cualquier NIC con driver WLAN
 estándar de Windows, sin depender de hardware dedicado en el caso base.
 
 ## Principio rector: honestidad metrológica

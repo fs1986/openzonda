@@ -81,7 +81,7 @@ Cada subagente declara su modelo en el frontmatter (campo model: opus | sonnet |
 
 ### Regla de escalado ★ (dev-core → opus)
 El agente líder de implementación usa opus (vía el parámetro model de la invocación o duplicando el agente como dev-core-opus) en las sesiones donde el coste de un error sutil es máximo:
-- S007 (contenedor .wifisurvey: atomicidad y superficie hostil), S011–S012 (structs ctypes y flujo de notificaciones: un offset mal calculado corrompe datos silenciosamente), S014–S015 (parser de IEs: correctitud binaria), F5 S030–S034 (RF engine: matemática de propagación y determinismo), F6 sesiones de import .esx (ingeniería inversa de formato).
+- S007 (contenedor .wifisurvey: atomicidad y superficie hostil), S011–S012 (structs ctypes y flujo de notificaciones: un offset mal calculado corrompe datos silenciosamente), S014–S015 (parser de IEs: correctitud binaria), F5 S030–S034 (RF engine: matemática de propagación y determinismo), F6 sesiones de import de proyectos de terceros (ingeniería inversa de formato).
 - El resto de sesiones no escala: Sonnet con el contrato de tests de qa delante es suficiente y 5× más económico.
 
 ### Configuración práctica
@@ -365,7 +365,7 @@ Se detallan al abrir cada fase (el agente pm-jira genera las tarjetas desde esta
 | --- | --- | --- |
 | F4 (7) | S023–S029 | Malla + IDW · Máscara de confianza + overlay distancia · Render cacheado en ProcessPool · Mapas derivados (cobertura/canal/QBSS) · Leyendas y escalas fijas · Plantilla reporte PDF/HTML · Release + retro |
 | F5 (7) | S030–S036 | Editor de muros + biblioteca materiales · Ray casting 2D · log_distance v1 + golden sintéticos · multi_wall v1 · APs virtuales + heatmap predictivo · [HW] Validación empírica 2 sites · Publicación de error + retro |
-| F6 (8) | S037–S044 | Co-channel/adjacent · Roaming candidates · Capacidad heurística QBSS · Import .esx (2 sesiones, fixtures del colega Ekahau) · Survey continuo asistido · Docs site MkDocs · Beta pública: anuncio + retro |
+| F6 (8) | S037–S044 | Co-channel/adjacent · Roaming candidates · Capacidad heurística QBSS · Import de proyectos de terceros (2 sesiones, fixtures de un colega usuario) · Survey continuo asistido · Docs site MkDocs · Beta pública: anuncio + retro |
 | F7 (4) | S045–S048 | Grafo de interferencia + coloreo de canales · Sugerencia de potencia · Posiciones candidatas · Justificación reproducible + retro |
 | F8 (4) | S049–S052 | Port AIProvider + backend OpenAI-compatible local · Contexto analítico JSON · Consentimiento + vista previa payload · Test de red cero-fugas + retro |
 | F9 (6) | S053–S058 | Fuzzing parser/contenedor · Auditoría NFRs · Firma de código · Docs finales + SDK plugins · Onboarding de maintainer · Release 1.0 |
