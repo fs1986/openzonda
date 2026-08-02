@@ -27,6 +27,12 @@ dev = [
     "ruff>=0.6",
     "import-linter>=2.1",
 ]
+# PyInstaller solo se necesita para construir el bundle; no lastra el entorno de
+# desarrollo ni el de tests. Revisado por security: herramienta de build, no entra
+# en el binario distribuido.
+build = [
+    "pyinstaller>=6.11",
+]
 
 # ---------------------------------------------------------------------------
 # Build: cada carpeta de paquete se mapea a un top-level import con su nombre.
@@ -50,8 +56,12 @@ packages = [
     "packages/ai",
     "packages/persistence",
     "apps/desktop",
+    "apps/openzonda",
     "native/windows",
 ]
+
+[project.gui-scripts]
+openzonda = "openzonda.__main__:main"
 
 # ---------------------------------------------------------------------------
 # uv
@@ -105,16 +115,16 @@ markers = [
 root_packages = [
     "domain", "application", "wifi", "rf_engine", "geometry",
     "heatmap", "analytics", "reporting", "interop", "ai",
-    "persistence", "desktop", "windows",
+    "persistence", "desktop", "openzonda", "windows",
 ]
 # Necesario porque los contratos "forbidden" nombran módulos externos
 # (PySide6, scipy, matplotlib, sqlite3, ctypes) para blindar el dominio y la UI.
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "Capas: UI -> Application -> Domain"
+name = "Capas: Composition root -> UI -> Application -> Domain"
 type = "layers"
-layers = ["desktop", "application", "domain"]
+layers = ["openzonda", "desktop", "application", "domain"]
 
 [[tool.importlinter.contracts]]
 name = "Pureza del dominio (solo stdlib + NumPy)"
@@ -131,3 +141,12 @@ name = "La UI no accede a infraestructura ni a Windows"
 type = "forbidden"
 source_modules = ["desktop"]
 forbidden_modules = ["persistence", "wifi", "windows", "ctypes"]
+
+# ADR-008: application declara los ports; los adaptadores concretos solo los conoce el
+# composition root. Sin este contrato, application podría importar persistence y la
+# inversión de dependencias quedaría en decoración.
+[[tool.importlinter.contracts]]
+name = "Application declara ports, no conoce adaptadores"
+type = "forbidden"
+source_modules = ["application"]
+forbidden_modules = ["persistence", "wifi", "windows", "desktop", "openzonda", "PySide6"]

@@ -33,9 +33,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # corte de luz), el fichero huérfano se identifica de un vistazo en `git status`.
 PROBE_NAME = "_probe_violacion_de_capas.py"
 
-CONTRATO_CAPAS = "Capas: UI -> Application -> Domain"
+CONTRATO_CAPAS = "Capas: Composition root -> UI -> Application -> Domain"
 CONTRATO_DOMINIO = "Pureza del dominio (solo stdlib + NumPy)"
 CONTRATO_UI = "La UI no accede a infraestructura ni a Windows"
+CONTRATO_APPLICATION = "Application declara ports, no conoce adaptadores"
 
 
 def _argv_lint_imports() -> list[str]:
@@ -119,6 +120,18 @@ def test_el_arbol_limpio_cumple_los_contratos() -> None:
             "import ctypes",
             CONTRATO_UI,
             id="ui-importa-ctypes",
+        ),
+        pytest.param(
+            "packages/application",
+            "import persistence",
+            CONTRATO_APPLICATION,
+            id="application-importa-un-adaptador",
+        ),
+        pytest.param(
+            "apps/desktop",
+            "import openzonda",
+            CONTRATO_CAPAS,
+            id="ui-importa-el-composition-root",
         ),
     ],
 )
