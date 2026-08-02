@@ -39,6 +39,53 @@ OpenZonda no promete lo que el stack WLAN de Windows no puede dar:
 - **Sin noise floor** en la mayoría de drivers → SNR "no disponible", **nunca estimado**.
 - **Sin monitor mode** → capacidad estimada vía BSS Load (IE QBSS), declarado como heurística.
 
+## Instalación
+
+Descarga el instalador `.msi` de la [última release](https://github.com/fs1986/openzonda/releases).
+Es **per-user**: no pide permisos de administrador y se instala en
+`%LOCALAPPDATA%\Programs\OpenZonda`. No toca tus proyectos ni tu configuración.
+
+### Windows va a advertirte, y es esperable
+
+Al ejecutar el instalador verás una pantalla azul de **Windows SmartScreen**:
+
+> *Windows protegió su PC — Microsoft Defender SmartScreen impidió el inicio de una
+> aplicación desconocida.*
+
+Para continuar: **Más información → Ejecutar de todas formas**.
+
+Esa advertencia **no significa que el archivo esté infectado**. Significa que el
+instalador no está firmado con un certificado de firma de código, algo que cuesta entre
+200 y 600 USD al año y que OpenZonda no paga mientras esté en versión 0.x. Es la
+situación normal de casi todo el software open source distribuido por particulares.
+
+### Verifica antes de instalar, en lugar de confiar
+
+Precisamente porque no hay firma, cada release publica lo necesario para que compruebes
+qué estás instalando sin depender de nuestra palabra:
+
+```powershell
+Get-FileHash .\OpenZonda-0.0.1.msi -Algorithm SHA256
+```
+
+Compara el resultado con la línea correspondiente de `SHA256SUMS.txt`, publicado junto al
+instalador. Si coincide, el archivo es byte a byte el que produjo CI a partir del código
+de este repositorio.
+
+El archivo `openzonda-sbom.cdx.json` de la misma release es un **SBOM CycloneDX**: lista
+todas las dependencias de terceros que viajan dentro del instalador, con su versión y su
+licencia. Se genera desde el mismo lockfile con el que se compila, así que no puede
+desincronizarse de lo que realmente se distribuye.
+
+Si algo de esto no cuadra, **no instales** y abre una issue.
+
+### Sin instalar nada: modo portable
+
+Si trabajas en un equipo donde no puedes instalar software —situación habitual haciendo
+surveys en redes ajenas—, coloca un archivo vacío llamado `portable.marker` junto a
+`OpenZonda.exe`. La aplicación guardará configuración, logs y caché **junto al
+ejecutable**, sin escribir nada en el perfil del usuario.
+
 ## Arquitectura
 
 Hexagonal (ports & adapters), verificada en CI con `import-linter`:
