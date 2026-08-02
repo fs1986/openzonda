@@ -110,7 +110,7 @@ Este capítulo existe para que ninguna decisión de producto contradiga la físi
 | Visualización | Matplotlib (Agg) + QPainter para overlay interactivo | PSF-like | Colormaps perceptuales (viridis/turbo) |
 | Imagen | Pillow; OpenCV solo si se requiere (vectorización de muros) | MIT-like/Apache | Evaluar coste de bundle antes de incluir OpenCV |
 | Packaging | PyInstaller (onedir) | GPL con excepción | onedir, no onefile: arranque más rápido y firma por archivo |
-| Installer | WiX Toolset v4 (MSI per-user) | MS-RL | Upgrade codes estables; MSIX post-1.0 |
+| Installer | WiX Toolset v5 (MSI per-user) | MS-RL | Upgrade codes estables; MSIX post-1.0 |
 | Testing | pytest, hypothesis, mypy, ruff | MIT | CI bloqueante |
 | CI/CD | GitHub Actions | — | Builds reproducibles, SBOM, firma |
 
@@ -344,7 +344,7 @@ proyecto.wifisurvey  (ZIP)
 | Exfiltración vía capa IA | Consentimiento por proyecto, vista previa del payload, proveedores configurables local-first |
 
 # 18. Instalación, actualización y desinstalación
-- Instalador MSI (WiX v4), per-user por defecto (sin elevación); opción all-users con elevación solo si se elige.
+- Instalador MSI (WiX v5), per-user por defecto (sin elevación); opción all-users con elevación solo si se elige.
 - Idempotencia: reejecutar el instalador repara/actualiza sin duplicar accesos; UpgradeCode estable, MajorUpgrade configurado.
 - Preflight: arquitectura x64, versión de Windows, espacio en disco.
 - Separación estricta binarios/datos: nunca proyectos en Program Files.
@@ -489,7 +489,7 @@ Decisión: la clasificación observado/derivado/estimado/predictivo es parte del
 - Microsoft — Windows client lifecycle (fin de soporte de Windows 10, oct-2025).
 - IEEE 802.11-2020 — Information Elements, BSS Load (element ID 11).
 - COST 231 Final Report — Multi-Wall Model; ITU-R P.1238 (propagación indoor).
-- WiX Toolset v4 — MSI authoring, MajorUpgrade, per-user installs.
+- WiX Toolset v5 — MSI authoring, MajorUpgrade, per-user installs. Se eligió v5 sobre v4 porque el elemento `<Files>` (cosecha automática de un árbol de archivos) solo existe desde v5; en v4 habría que enumerar a mano las dependencias de Qt, lista que se desincroniza en silencio en cuanto cambia una versión.
 - PyInstaller — modo onedir y firma de binarios.
 - CycloneDX — especificación SBOM; Keep a Changelog; Developer Certificate of Origin.
 

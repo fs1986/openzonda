@@ -210,7 +210,7 @@ No fijar `CLAUDE\_CODE\_SUBAGENT\_MODEL` global (pisaría esta matriz).
 
 Python 3.13 · PySide6 (Qt6, LGPL, enlace dinámico) · NumPy/SciPy · SQLite (WAL) ·
 
-Matplotlib · ctypes para wlanapi.dll · PyInstaller (onedir) · WiX v4 (MSI per-user) ·
+Matplotlib · ctypes para wlanapi.dll · PyInstaller (onedir) · WiX v5 (MSI per-user) ·
 
 pytest/hypothesis/mypy(strict)/ruff · uv · GitHub Actions.
 

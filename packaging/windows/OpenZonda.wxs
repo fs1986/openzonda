@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Instalador MSI de OpenZonda (F0.6).
+
+  Per-user y sin elevación por defecto (diseño §18): OpenZonda es una herramienta de
+  campo y pedir permisos de administrador para instalarla en el portátil de trabajo es
+  fricción sin contrapartida.
+
+  Separación estricta binarios/datos: el MSI escribe **solo** en
+  %LOCALAPPDATA%\Programs\OpenZonda. Ni settings, ni logs, ni proyectos. De ahí se sigue
+  que desinstalar no puede destruir datos de usuario, que es como se satisface la decisión
+  inmutable nº 6 ("no eliminar proyectos en upgrade/uninstall sin confirmación explícita"):
+  no eliminando nada.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Package
+      Name="OpenZonda"
+      Manufacturer="OpenZonda contributors"
+      Version="$(var.ProductVersion)"
+      UpgradeCode="A6A4DC0F-E2C2-4F01-A78D-533DF6AA4272"
+      Scope="perUser"
+      Compressed="yes"
+      InstallerVersion="500"
+      Language="1033">
+
+    <SummaryInformation Description="OpenZonda — site surveys WiFi" />
+
+    <!--
+      Idempotencia: reejecutar el instalador repara o actualiza en vez de duplicar la
+      entrada en Programas y características. El UpgradeCode de arriba es fijo y no debe
+      cambiarse nunca: es lo que permite a Windows reconocer versiones anteriores.
+    -->
+    <MajorUpgrade
+        AllowSameVersionUpgrades="yes"
+        DowngradeErrorMessage="Ya hay una versión más reciente de OpenZonda instalada. Desinstálala antes de instalar esta." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!--
+      Preflight (diseño §18).
+
+      Esto NO contradice ADR-001 ("toda API se comprueba por disponibilidad en runtime,
+      nunca por número de versión"): aquello se refiere a detectar capacidades del stack
+      WLAN dentro de la aplicación. Aquí se trata de impedir la instalación en un SO fuera
+      del baseline soportado, que es precisamente donde un número de versión es el
+      criterio correcto y el único disponible antes de que exista aplicación alguna.
+
+      El espacio en disco no se comprueba aquí a propósito: Windows Installer lo calcula
+      durante CostFinalize y aborta con un mensaje claro y localizado. Duplicar esa lógica
+      con un umbral fijo produciría una comprobación que envejece mal y que puede
+      contradecir a la del propio instalador.
+    -->
+    <Launch
+        Condition="VersionNT64"
+        Message="OpenZonda requiere Windows de 64 bits (x64)." />
+    <Launch
+        Condition="Installed OR (WindowsBuild &gt;= 19045)"
+        Message="OpenZonda requiere Windows 10 22H2 (build 19045) o superior. Consulta ADR-001." />
+
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/fs1986/openzonda" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/fs1986/openzonda/issues" />
+    <Property Id="ARPNOREPAIR" Value="0" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="OpenZonda" />
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ShortcutFolder" Name="OpenZonda" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="OpenZonda" Level="1">
+      <ComponentGroupRef Id="BundleFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+
+    <!--
+      Cosecha del bundle onedir producido por PyInstaller. Se harvestea el árbol completo
+      en vez de enumerar archivos a mano: las dependencias de Qt cambian entre versiones y
+      una lista manual se desincroniza en silencio, que es la peor forma de romperse.
+    -->
+    <ComponentGroup Id="BundleFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.BundleDir)\**" />
+    </ComponentGroup>
+
+    <Component Id="StartMenuShortcut"
+               Directory="ShortcutFolder"
+               Guid="6CDACD63-5781-4EBC-84D8-108E8C46D197">
+      <Shortcut Id="OpenZondaShortcut"
+                Name="OpenZonda"
+                Description="Site surveys WiFi"
+                Target="[INSTALLFOLDER]OpenZonda.exe"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveShortcutFolder" Directory="ShortcutFolder" On="uninstall" />
+      <!-- En instalaciones per-user el keypath debe ser HKCU, no un archivo. -->
+      <RegistryValue Root="HKCU"
+                     Key="Software\OpenZonda"
+                     Name="Installed"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes" />
+    </Component>
+
+  </Package>
+</Wix>
