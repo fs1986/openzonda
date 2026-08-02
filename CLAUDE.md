@@ -108,7 +108,7 @@ reporting/ interop/ ai/ persistence/` + `native/windows/` + `apps/desktop/`.
 
 
 
-Cada sesión = 1 tarjeta Jira (`OPENZONDA-N`) = 1 rama `feature/openzonda-N-slug`.
+Cada sesión = 1 tarjeta Jira (`OZ-N`, proyecto OPENZONDA) = 1 rama `feature/oz-N-slug`.
 
 
 
