@@ -84,16 +84,26 @@ del diseño, porque F0.7 no lo pide.
 
 | Deuda | Origen | Tarjeta que la recoge |
 | --- | --- | --- |
-| `pre-commit` nunca configurado, pese a pedirlo la instrucción de S002 | S002 | **Ninguna** |
-| ZIP portable como canal de distribución (diseño §Distribución) no producido por el release | S004 | **Ninguna** |
-| Instalador sin firmar; SmartScreen advertirá | S004 | **Ninguna** |
-| Sin icono ni `VERSIONINFO` en el ejecutable | S003 | **Ninguna** |
-| Diálogo de desinstalación con opción "eliminar todo" (diseño §18) no implementado | S004 | **Ninguna** |
-| El plan operativo §2 describe un repo documental separado que no existe | S001 | **Ninguna** |
-| El diseño §7.3 no contempla `apps/openzonda` | S003 | **Ninguna** |
+| Instalador sin firmar; SmartScreen advertirá | S004 | **OZ-26** — bloqueada: requiere comprar certificado |
+| ZIP portable como canal de distribución (diseño §Distribución) no producido por el release | S004 | **OZ-27** |
+| Diálogo de desinstalación con opción "eliminar todo" (diseño §18) no implementado | S004 | **OZ-28** |
+| Sin icono ni `VERSIONINFO` en el ejecutable | S003 | **OZ-29** — el icono queda bloqueado: es decisión de identidad visual |
+| `pre-commit` nunca configurado, pese a pedirlo la instrucción de S002 | S002 | **OZ-30** |
+| El plan operativo §2 describe un repo documental separado que no existe | S001 | **OZ-31** |
+| El diseño §7.3 no contempla `apps/openzonda` | S003 | **OZ-31** |
 
-Siete elementos de deuda y **ninguna tarjeta que los recoja**. Es el mismo mecanismo que
-produjo los DoD fallidos: quedan registrados en un log que nadie está obligado a releer.
+> **Actualización del 2026-08-02.** Cuando se redactó esta retro, los siete elementos no
+> tenían tarjeta, y eso era el mismo mecanismo que produjo los DoD fallidos: quedaban
+> registrados en un log que nadie está obligado a releer. El fundador autorizó el triaje y
+> se abrieron seis tarjetas (dos elementos comparten la OZ-31 por ser el mismo trabajo).
+>
+> Dos quedan **bloqueadas por decisiones que no son técnicas**: OZ-26 necesita adquirir un
+> certificado de firma de código, y el icono de OZ-29 es una decisión de identidad visual
+> del fundador. Estar bloqueada y estar olvidada no es lo mismo: ahora son visibles en el
+> tablero y su bloqueo está escrito.
+>
+> Con esto queda cumplido el acuerdo nº 4 y levantada la condición de que F1 no arranque
+> hasta que la deuda tuviera destino.
 
 ## Validaciones [HW] pendientes acumuladas
 
