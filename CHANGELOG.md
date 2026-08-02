@@ -41,6 +41,11 @@ el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   - `BUILD.md`, `CODE_OF_CONDUCT.md`, plantillas de issue y PR.
   - Retro de fase F0 en `docs/retros/F0-retro.md`.
 
+- **Smoke test usable por una persona (OZ-25).**
+  - Modificador `-Visible` en `scripts/smoke_local.ps1`: muestra la ventana 8 s en lugar de lanzarla minimizada, para poder validarla a ojo.
+  - `scripts/smoke_local.cmd`: lanzador de doble clic que aplica la política de ejecución, mantiene la ventana abierta al terminar —también al fallar— y propaga el código de salida.
+  - La salida ahora separa el arranque real del cierre programado, en lugar de obligar a restar mentalmente.
+
 ### Cambiado
 - Toolchain del instalador: WiX v4 → **v5**. El elemento `<Files>`, que cosecha el árbol del bundle automáticamente, solo existe desde v5; en v4 habría que enumerar a mano las dependencias de Qt, una lista que se desincroniza en silencio al cambiar de versión.
 - Rutas de aplicación y códigos de error adoptan el nombre definitivo del producto: `%APPDATA%\OpenZonda\`, prefijo `OZD-` para errores (no `OZ-`, que colisiona con las claves de tarjeta) y CLI de fixtures `oz-capture`. El renombrado nunca se había propagado al diseño §18 y §19.
@@ -49,4 +54,5 @@ el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 - Los contratos de `import-linter` se ejecutaban en CI pero nada demostraba que rechazasen una violación real; un contrato mal escrito habría pasado en verde indefinidamente (ADR-003).
 - Protección de rama en `main`: ambos checks de CI son obligatorios, lo que convierte la matriz en una barrera real en lugar de un informe.
 - `SECURITY.md` afirmaba que las releases se publican con «artefactos firmados». Es falso: no hay certificado de firma de código y SmartScreen advertirá. Se documenta qué se publica en su lugar —SHA256SUMS y SBOM— y por qué.
+- `BUILD.md` usaba `pwsh` en sus ejemplos, que es PowerShell 7 y no viene con Windows: quien siguiera la guía al pie de la letra se encontraba con «comando no reconocido» en el primer intento.
 - El instalador empaquetaba los residuos de ejecución del bundle (`logs/`, `settings.json`). Con un `portable.marker` presente, toda instalación habría arrancado en modo portable. Se construye desde un staging limpio y el build falla si algún residuo sobrevive.

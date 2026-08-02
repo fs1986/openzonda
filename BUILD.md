@@ -75,20 +75,38 @@ se congela en `apps/openzonda/_build_info.py`, que **no se versiona**: se regene
 build. Sin tags, el bundle se identifica como `0.0.0+dev` o con el hash del commit, nunca
 con un número inventado que parezca una release.
 
-Verifícalo:
+### Verificar el bundle
+
+El smoke test comprueba tamaño, código de salida y que el log sea JSON lines válido,
+arrancando el ejecutable de verdad con su event loop. Tres formas de lanzarlo:
 
 ```powershell
-pwsh -File scripts/smoke_local.ps1
+# Verificación rápida, exactamente lo que hace CI
+powershell -ExecutionPolicy Bypass -File scripts/smoke_local.ps1
+
+# Validación visual: muestra la ventana 8 segundos antes de cerrarla sola
+powershell -ExecutionPolicy Bypass -File scripts/smoke_local.ps1 -Visible
 ```
 
-Comprueba tamaño, código de salida y que el log sea JSON lines válido, arrancando el
-ejecutable de verdad con su event loop.
+O **doble clic en `scripts\smoke_local.cmd`** desde el Explorador. Ese lanzador existe
+porque Windows bloquea los `.ps1` por política de ejecución: al hacer doble clic sobre el
+`.ps1` directamente solo verías una consola negra que se cierra al instante, sin dejar
+leer el error. El `.cmd` aplica la política, mantiene la ventana abierta al terminar
+—también cuando falla— y propaga el código de salida.
+
+`-ExecutionPolicy Bypass` es necesario por lo mismo. Si prefieres no escribirlo cada vez,
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` lo resuelve de forma permanente para
+tu usuario.
+
+Nota: los ejemplos usan `powershell` (Windows PowerShell 5.1, el que viene de fábrica) y no
+`pwsh`, que es PowerShell 7 y hay que instalarlo aparte. Los scripts del repositorio son
+compatibles con ambos.
 
 ## Construir el instalador (solo Windows)
 
 ```powershell
 dotnet tool install --global wix --version 5.*
-pwsh -File packaging/windows/build_msi.ps1
+powershell -ExecutionPolicy Bypass -File packaging/windows/build_msi.ps1
 ```
 
 Produce `dist/OpenZonda-<version>.msi` (~37 MB). El script copia el bundle a un staging
