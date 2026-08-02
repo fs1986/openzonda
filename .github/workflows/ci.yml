@@ -11,19 +11,35 @@ concurrency:
 
 jobs:
   quality:
-    name: Lint · Types · Tests · Capas
-    runs-on: ubuntu-latest
+    name: Lint · Types · Tests · Capas (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Sin fail-fast: si Windows rompe, queremos ver igualmente el resultado de
+      # Linux (y al revés) para saber si el fallo es del SO o del cambio.
+      fail-fast: false
+      matrix:
+        # Windows es el SO objetivo del producto (ctypes sobre wlanapi.dll,
+        # PyInstaller, WiX). Linux se mantiene porque es más rápido y detecta
+        # dependencias accidentales de rutas o mayúsculas de Windows.
+        os: [ubuntu-latest, windows-latest]
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
+          # Versión fijada a propósito: el uv.lock declara un formato de lock
+          # concreto y un uv más nuevo podría reescribirlo. Subir esta versión
+          # es un cambio deliberado, con su regeneración del lock.
+          version: "0.11.32"
           python-version: "3.13"
           enable-cache: true
 
-      - name: Sync (dev)
-        run: uv sync --group dev
+      - name: Sync (dev, lockfile congelado)
+        # --locked falla si uv.lock no concuerda con pyproject.toml, en lugar de
+        # actualizarlo en silencio. Sin esto el lockfile no garantiza nada.
+        run: uv sync --locked --group dev
 
       - name: Ruff (lint + formato)
         run: |
