@@ -53,7 +53,7 @@ Objetivo: repositorio profesional + pipeline completo build→test→package→i
 | F0.3 | CI base | GitHub Actions: lint+type+test en ubuntu (rápido) y windows-latest (fiel); cache de uv | Pipeline < 5 min en PR típico |
 | F0.4 | Walking skeleton Qt | apps/desktop con MainWindow vacía PySide6, logging estructurado, settings.json versionado, modo portable detectado | Ventana abre y cierra limpia; log JSON generado |
 | F0.5 | Packaging PyInstaller | spec onedir; excluir módulos innecesarios; hook de versión desde git tag | Bundle < 180 MB; arranque < 4 s en VM |
-| F0.6 | Instalador WiX v4 | MSI per-user, UpgradeCode fijo, MajorUpgrade, shortcut, uninstaller, preflight x64/espacio | Install→upgrade→uninstall limpio verificado por script en VM |
+| F0.6 | Instalador WiX v5 | MSI per-user, UpgradeCode fijo, MajorUpgrade, shortcut, uninstaller, preflight x64/espacio | Install→upgrade→uninstall limpio verificado por script en VM |
 | F0.7 | Pipeline de release | Workflow por tag: build → smoke test en runners Win → SHA256SUMS → SBOM CycloneDX → GitHub Release draft | Tag v0.0.1 produce release completa sin intervención manual |
 | F0.8 | Gobernanza y docs base | README con visión y capturas, CONTRIBUTING, GOVERNANCE, SECURITY, CODE_OF_CONDUCT, plantillas issue/PR, ADR/ con 001–006 | Un desarrollador externo puede compilar siguiendo BUILD.md sin preguntar nada |
 

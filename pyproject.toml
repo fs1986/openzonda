@@ -33,6 +33,11 @@ dev = [
 build = [
     "pyinstaller>=6.11",
 ]
+# Herramientas de auditoría y SBOM. Tampoco viajan en el binario distribuido.
+security = [
+    "cyclonedx-bom>=6.0",
+    "pip-audit>=2.7",
+]
 
 # ---------------------------------------------------------------------------
 # Build: cada carpeta de paquete se mapea a un top-level import con su nombre.

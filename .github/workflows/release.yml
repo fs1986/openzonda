@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  QT_QPA_PLATFORM: offscreen
+
+jobs:
+  release:
+    name: Bundle · MSI · SBOM · Release draft
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # El spec de PyInstaller y build_msi.ps1 derivan la versión de `git describe`.
+          # Sin historial ni tags, el artefacto se etiquetaría como desarrollo.
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.32"
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Instalar WiX v5
+        run: dotnet tool install --global wix --version 5.*
+
+      - name: Sync (build + UI)
+        run: uv sync --locked --group build --extra ui
+
+      - name: Construir bundle onedir
+        run: uv run pyinstaller packaging/openzonda.spec --noconfirm
+
+      - name: Smoke test del bundle
+        # Un release que no arranca no es un release. Se verifica antes de empaquetar,
+        # no después de publicarlo.
+        shell: pwsh
+        run: ./scripts/smoke_local.ps1
+
+      - name: Construir MSI
+        # build_msi.ps1 copia el bundle a un staging limpio: los residuos que deja el
+        # smoke test (logs/, settings.json y, sobre todo, portable.marker) no pueden
+        # colarse en el instalador.
+        shell: pwsh
+        run: ./packaging/windows/build_msi.ps1
+
+      - name: Generar SBOM CycloneDX
+        shell: pwsh
+        run: |
+          uv export --no-dev --extra ui --no-emit-project --format requirements.txt --no-hashes -o dist/requirements-runtime.txt
+          uv run --group security cyclonedx-py requirements dist/requirements-runtime.txt --of JSON --output-reproducible -o dist/openzonda-sbom.cdx.json
+
+      - name: Auditar dependencias de runtime
+        # Bloqueante: estas son las que viajan dentro del MSI, a la máquina del usuario.
+        shell: pwsh
+        run: uv run --group security pip-audit --requirement dist/requirements-runtime.txt --progress-spinner off
+
+      - name: Calcular SHA256SUMS
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $artefactos = @(Get-ChildItem dist -File -Filter *.msi) + @(Get-ChildItem dist -File -Filter openzonda-sbom.cdx.json)
+          if ($artefactos.Count -lt 2) { throw "Faltan artefactos que firmar: se encontraron $($artefactos.Count)" }
+          $lineas = foreach ($a in $artefactos) {
+            $hash = (Get-FileHash -LiteralPath $a.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($a.Name)"
+          }
+          # UTF-8 sin BOM: sha256sum en Linux no sabe saltarse un BOM y fallaría al verificar.
+          [IO.File]::WriteAllLines("$PWD/dist/SHA256SUMS.txt", $lineas)
+          Get-Content dist/SHA256SUMS.txt
+
+      - name: Crear release draft
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Lista explícita de adjuntos: un filtro por extensión acabaría publicando
+          # subproductos del build, como el requirements exportado para el SBOM.
+          $adjuntos = @(
+            (Get-ChildItem dist -File -Filter *.msi | ForEach-Object { $_.FullName })
+            "dist/openzonda-sbom.cdx.json"
+            "dist/SHA256SUMS.txt"
+          )
+          gh release create "${{ github.ref_name }}" `
+            --draft `
+            --title "OpenZonda ${{ github.ref_name }}" `
+            --notes-file packaging/release-notes.md `
+            @adjuntos
+
+      - name: Publicar artefactos del build
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenZonda-release-${{ github.ref_name }}
+          path: |
+            dist/*.msi
+            dist/openzonda-sbom.cdx.json
+            dist/SHA256SUMS.txt
+          retention-days: 90

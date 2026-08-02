@@ -1,0 +1,83 @@
+name: Reportar un fallo
+description: Algo no funciona como debería
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por el reporte. Cuanto más concreto, antes se arregla.
+
+        **Si el fallo es de seguridad, no abras una issue**: sigue el procedimiento de
+        [SECURITY.md](../blob/main/SECURITY.md).
+
+  - type: textarea
+    id: que-pasa
+    attributes:
+      label: Qué ocurre
+      description: Qué esperabas y qué pasó en su lugar.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproducir
+    attributes:
+      label: Cómo reproducirlo
+      description: Pasos concretos. Si no es reproducible de forma fiable, dilo — también es información útil.
+      placeholder: |
+        1. Abrir OpenZonda
+        2. ...
+        3. Ocurre X
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Versión de OpenZonda
+      description: Aparece en el título de la ventana.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Versión de Windows
+      description: "`winver` te la dice. Incluye el número de build."
+      placeholder: "Windows 11 23H2 (build 22631)"
+    validations:
+      required: true
+
+  - type: input
+    id: adaptador
+    attributes:
+      label: Adaptador WiFi
+      description: |
+        Solo si el fallo tiene que ver con la captura. Modelo y versión de driver
+        (Administrador de dispositivos → Adaptadores de red → Propiedades → Controlador).
+
+        Esto importa más de lo que parece: el RSSI no está calibrado y cada NIC difiere,
+        así que el mismo síntoma puede tener causas distintas según el adaptador.
+      placeholder: "Intel AX211, driver 23.60.1.1"
+
+  - type: dropdown
+    id: instalacion
+    attributes:
+      label: Cómo lo instalaste
+      options:
+        - Instalador MSI
+        - Modo portable
+        - Desde fuentes
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log
+      description: |
+        Pega las líneas relevantes de `%LOCALAPPDATA%\OpenZonda\logs\openzonda.log`
+        (o de `logs\` junto al ejecutable si usas el modo portable).
+
+        **Revísalas antes de pegarlas**: no incluyas nada que no quieras hacer público.
+      render: json

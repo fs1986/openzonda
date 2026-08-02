@@ -1,0 +1,43 @@
+name: Proponer una mejora
+description: Sugerir una funcionalidad o un cambio
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Antes de escribir, echa un vistazo a `docs/design/plan-implementacion.md`: puede
+        que lo que propones ya esté planificado para una fase posterior.
+
+  - type: textarea
+    id: problema
+    attributes:
+      label: Qué problema resuelve
+      description: |
+        Empieza por el problema, no por la solución. Un caso real en el que la falta de
+        esto te ha estorbado vale más que una descripción de la funcionalidad.
+    validations:
+      required: true
+
+  - type: textarea
+    id: propuesta
+    attributes:
+      label: Qué propones
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: Alternativas consideradas
+      description: Qué otras formas de resolverlo has descartado, y por qué.
+
+  - type: checkboxes
+    id: invariantes
+    attributes:
+      label: Compatibilidad con los invariantes del proyecto
+      description: |
+        OpenZonda tiene decisiones que no cambian sin un ADR nuevo (ver `CLAUDE.md`). Las
+        dos que más propuestas afectan son estas.
+      options:
+        - label: "La propuesta no requiere presentar una estimación como si fuera una medición (ADR-006)."
+        - label: "La propuesta no requiere conexión a la nube para que el survey básico funcione."

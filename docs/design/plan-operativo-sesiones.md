@@ -209,7 +209,7 @@ DoD de la sesión: Bundle < 180 MB arranca en tu máquina [HW: ejecutar smoke_lo
 Objetivo: F0.6–F0.8: MSI per-user idempotente, workflow de release por tag con SHA256+SBOM, docs de gobernanza.
 Subagentes: devops (líder), security (SBOM), docs (gobernanza), pm-jira, scrum (retro F0)
 Instrucción de arranque para Claude Code:
-Sesión S004 / OPENZONDA-4. Autoría WiX v4: MSI per-user,
+Sesión S004 / OPENZONDA-4. Autoría WiX v5: MSI per-user,
 UpgradeCode fijo, MajorUpgrade, uninstaller, preflight.
 Workflow release.yml por tag: build → SHA256SUMS → SBOM
 CycloneDX → Release draft. Redacta CONTRIBUTING, GOVERNANCE,
@@ -372,7 +372,7 @@ Se detallan al abrir cada fase (el agente pm-jira genera las tarjetas desde esta
 
 # 7. Arranque inmediato (checklist del fundador)
 - Registrar la marca digital (verificado 02-08-2026: org GitHub 'openzonda' libre; sin paquete PyPI 'openzonda'; openzonda.org/.com/.dev/.io/.cl sin DNS — confirmar en el registrador antes de pagar): crear org GitHub, repo openzonda-docs, registrar openzonda.org (+.cl recomendado), proyecto Jira key OPENZONDA con tablero Kanban de 5 columnas.
-- Instalar en el equipo de desarrollo: Git, uv, Node LTS (para tooling), WiX v4, Claude Code; verificar acceso MCP Atlassian desde Code.
+- Instalar en el equipo de desarrollo: Git, uv, Node LTS (para tooling), WiX v5, Claude Code; verificar acceso MCP Atlassian desde Code.
 - Pedir a Claude (chat) la creación del primer conjunto de tarjetas (OPENZONDA-1..22) desde el catálogo §5 — cuando tú lo decidas.
 - Copiar los tres documentos (diseño, plan, plan operativo) a una carpeta local para que S001 los migre al repo documental.
 - Ejecutar la sesión S001.
