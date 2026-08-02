@@ -1,0 +1,130 @@
+[project]
+name = "openzonda"
+version = "0.0.1"
+description = "OpenZonda — site surveys WiFi open source para Windows 10/11"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "Apache-2.0" }
+authors = [{ name = "OpenZonda contributors" }]
+keywords = ["wifi", "site-survey", "heatmap", "rf", "windows"]
+
+# Dependencias de runtime del núcleo. La UI (PySide6) y otros adapters
+# se declaran como extras para no forzar su instalación en CI de dominio.
+dependencies = [
+    "numpy>=2.1",
+]
+
+[project.optional-dependencies]
+ui = ["PySide6>=6.7"]
+science = ["scipy>=1.14", "matplotlib>=3.9", "pillow>=10.4"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=5.0",
+    "hypothesis>=6.112",
+    "mypy>=1.11",
+    "ruff>=0.6",
+    "import-linter>=2.1",
+]
+
+# ---------------------------------------------------------------------------
+# Build: cada carpeta de paquete se mapea a un top-level import con su nombre.
+# domain/ -> import domain, wifi/ -> import wifi, etc. (arquitectura hexagonal).
+# ---------------------------------------------------------------------------
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "packages/domain",
+    "packages/application",
+    "packages/wifi",
+    "packages/rf_engine",
+    "packages/geometry",
+    "packages/heatmap",
+    "packages/analytics",
+    "packages/reporting",
+    "packages/interop",
+    "packages/ai",
+    "packages/persistence",
+    "apps/desktop",
+    "native/windows",
+]
+
+# ---------------------------------------------------------------------------
+# uv
+# ---------------------------------------------------------------------------
+[tool.uv]
+package = true
+
+# ---------------------------------------------------------------------------
+# Ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["packages", "apps", "native", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+# ---------------------------------------------------------------------------
+# mypy — strict en el núcleo determinista (dominio + RF).
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.13"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_reexport = true
+
+[[tool.mypy.overrides]]
+module = ["domain.*", "rf_engine.*"]
+strict = true
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "hw: requiere hardware/NIC WiFi real (excluido de CI, validado por el fundador)",
+]
+
+# ---------------------------------------------------------------------------
+# import-linter — contratos de capas (ADR-003).
+#   UI (desktop) -> application -> domain
+#   El dominio no importa nada del proyecto ni frameworks externos.
+#   La UI no toca infraestructura ni APIs de Windows directamente.
+# ---------------------------------------------------------------------------
+[tool.importlinter]
+root_packages = [
+    "domain", "application", "wifi", "rf_engine", "geometry",
+    "heatmap", "analytics", "reporting", "interop", "ai",
+    "persistence", "desktop", "windows",
+]
+
+[[tool.importlinter.contracts]]
+name = "Capas: UI -> Application -> Domain"
+type = "layers"
+layers = ["desktop", "application", "domain"]
+
+[[tool.importlinter.contracts]]
+name = "Pureza del dominio (solo stdlib + NumPy)"
+type = "forbidden"
+source_modules = ["domain"]
+forbidden_modules = [
+    "application", "wifi", "rf_engine", "geometry", "heatmap",
+    "analytics", "reporting", "interop", "ai", "persistence",
+    "desktop", "windows", "PySide6", "scipy", "matplotlib", "sqlite3",
+]
+
+[[tool.importlinter.contracts]]
+name = "La UI no accede a infraestructura ni a Windows"
+type = "forbidden"
+source_modules = ["desktop"]
+forbidden_modules = ["persistence", "wifi", "windows", "ctypes"]

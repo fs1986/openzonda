@@ -1,0 +1,16 @@
+# Normalización de fin de línea: LF en el repo para todo el texto.
+* text=auto eol=lf
+
+# Scripts de Windows conservan CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binarios (sin normalizar ni difear como texto).
+*.docx binary
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.msi  binary
+*.pyd  binary
+*.dll  binary
