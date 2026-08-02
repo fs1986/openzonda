@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Vulnerabilidad de seguridad
+    url: https://github.com/fs1986/openzonda/security/advisories/new
+    about: No abras una issue pública. Reporta en privado siguiendo SECURITY.md.
+  - name: Preguntas y uso
+    url: https://github.com/fs1986/openzonda/discussions
+    about: Para dudas de uso o para compartir resultados de campo.
