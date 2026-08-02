@@ -19,17 +19,37 @@
 .PARAMETER TimeoutSeconds
     Tiempo máximo de espera antes de considerar el arranque colgado.
 
+.PARAMETER Visible
+    Muestra la ventana de la aplicación y la mantiene abierta unos segundos, en lugar de
+    lanzarla minimizada y cerrarla enseguida. Sirve para la validación [HW]: comprobar que
+    la interfaz se dibuja de verdad. El comportamiento por defecto NO cambia, porque CI
+    depende de que sea rápido y silencioso.
+
 .EXAMPLE
-    pwsh -File scripts/smoke_local.ps1
+    # Verificación rápida, igual que en CI.
+    powershell -ExecutionPolicy Bypass -File scripts/smoke_local.ps1
+
+.EXAMPLE
+    # Validación [HW]: ver la ventana.
+    powershell -ExecutionPolicy Bypass -File scripts/smoke_local.ps1 -Visible
+
+.EXAMPLE
+    # Desde el Explorador: doble clic en scripts\smoke_local.cmd
 #>
 [CmdletBinding()]
 param(
     [string]$BundleDir,
     [int]$TimeoutSeconds = 60,
-    [int]$MaxSizeMB = 180
+    [int]$MaxSizeMB = 180,
+    [switch]$Visible
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Cuánto permanece abierta la ventana antes del cierre programado. En modo visible se
+# alarga para que dé tiempo a mirarla, redimensionarla y comprobar que responde.
+$cierreMs = if ($Visible) { 8000 } else { 1500 }
+$estiloVentana = if ($Visible) { 'Normal' } else { 'Minimized' }
 
 # Join-Path con más de dos segmentos es sintaxis de PowerShell 7; se encadena para que el
 # script también corra en el Windows PowerShell 5.1 que trae Windows de fábrica.
@@ -63,7 +83,12 @@ Write-Ok "$mb MB (presupuesto $MaxSizeMB MB)"
 # --- 2. Arranque en modo portable aislado ---------------------------------------------
 # Se fuerza modo portable con un marker: así el smoke test no escribe en el perfil real
 # del usuario ni contamina la configuración de una instalación existente.
-Write-Paso 'Arrancando el bundle en modo portable aislado'
+if ($Visible) {
+    Write-Paso "Arrancando el bundle en modo portable aislado (ventana visible $($cierreMs / 1000) s)"
+    Write-Host '    Mírala: debe abrirse, poder redimensionarse y cerrarse sola sin colgarse.' -ForegroundColor DarkGray
+} else {
+    Write-Paso 'Arrancando el bundle en modo portable aislado'
+}
 $marker = Join-Path $BundleDir 'portable.marker'
 $markerYaExistia = Test-Path -LiteralPath $marker
 if (-not $markerYaExistia) { New-Item -ItemType File -Path $marker | Out-Null }
@@ -73,7 +98,7 @@ if (Test-Path -LiteralPath $logsDir) { Remove-Item -LiteralPath $logsDir -Recurs
 
 try {
     $inicio = Get-Date
-    $proceso = Start-Process -FilePath $exe -ArgumentList '--smoke', '1500' -PassThru -WindowStyle Minimized
+    $proceso = Start-Process -FilePath $exe -ArgumentList '--smoke', "$cierreMs" -PassThru -WindowStyle $estiloVentana
     if (-not $proceso.WaitForExit($TimeoutSeconds * 1000)) {
         $proceso.Kill()
         Write-Fallo "El proceso no terminó en $TimeoutSeconds s"
@@ -81,7 +106,10 @@ try {
     $duracion = [math]::Round(((Get-Date) - $inicio).TotalSeconds, 1)
 
     if ($proceso.ExitCode -ne 0) { Write-Fallo "Código de salida $($proceso.ExitCode)" }
-    Write-Ok "Arrancó y cerró limpio en $duracion s (incluye el cierre programado de 1,5 s)"
+    $segundosCierre = ($cierreMs / 1000).ToString([cultureinfo]::CurrentCulture)
+    $arranqueReal = [math]::Round($duracion - ($cierreMs / 1000), 1)
+    Write-Ok "Arrancó y cerró limpio en $duracion s, de los cuales $segundosCierre s son el cierre programado"
+    Write-Ok "Arranque real: ~$arranqueReal s"
 
     # --- 3. Log JSON lines ------------------------------------------------------------
     Write-Paso 'Verificando el log estructurado'
