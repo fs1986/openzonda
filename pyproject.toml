@@ -107,6 +107,9 @@ root_packages = [
     "heatmap", "analytics", "reporting", "interop", "ai",
     "persistence", "desktop", "windows",
 ]
+# Necesario porque los contratos "forbidden" nombran módulos externos
+# (PySide6, scipy, matplotlib, sqlite3, ctypes) para blindar el dominio y la UI.
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Capas: UI -> Application -> Domain"
