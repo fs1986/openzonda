@@ -95,17 +95,28 @@ Tests agregados (`tests/integration/test_contratos_de_capas.py`):
       Un test que no puede fallar no es un test.
 - [x] Gate completo en verde **en Windows** (local): ruff check, ruff format --check,
       mypy --strict, lint-imports (3 kept, 0 broken), pytest 10 passed, cobertura 99 %.
-- [ ] **CI verde en Windows y Linux.** Pendiente: se verifica al abrir el PR. Localmente
-      solo se ha ejercitado Windows; nadie ha corrido Linux todavía.
-- [ ] **Job de Windows requerido para el merge.** Es configuración de branch protection en
-      GitHub, no del workflow. Requiere acción del fundador (ver abajo).
+- [x] **CI verde en Windows y Linux.** Verificado tras el merge del PR #1 (run
+      `30736884454` sobre `main`): `ubuntu-latest` 15 s, `windows-latest` 27 s, ambos en
+      verde. El log del job de Windows confirma `uv sync --locked` → *Resolved 39 packages*,
+      ruff, mypy, *Contracts: 3 kept, 0 broken* y *10 passed*. Muy por debajo del umbral de
+      5 min del DoD de S002.
+- [x] **Job de Windows requerido para el merge.** Protección de rama activada sobre `main`:
+      ambos checks requeridos, `strict` (la rama debe estar al día), sin force-push ni
+      borrado, y aplicada también a administradores.
 - [x] Session log y CHANGELOG.
 
 ## Validaciones pendientes del fundador
 
-1. **Branch protection**: marcar `Lint · Types · Tests · Capas (windows-latest)` como check
-   requerido en la rama `main`. Sin esto la matriz informa pero no bloquea.
-2. Revisar el PR y comprobar que ambos jobs pasan en < 5 min (umbral del DoD de S002).
+Ninguna al cierre. Ambas quedaron resueltas en la misma sesión:
+
+1. ~~Branch protection~~ — activada; ver DoD arriba. Revertible con
+   `gh api -X DELETE repos/fs1986/openzonda/branches/main/protection`.
+2. ~~Revisar el PR y comprobar que ambos jobs pasan en < 5 min~~ — PR #1 revisado y
+   mergeado por el fundador (`94a244c`); ambos jobs verdes.
+
+> Nota: esta sección y la casilla de CI del DoD se actualizaron en la sesión S025, una vez
+> conocido el resultado real de CI. En el momento de escribir el log original ambas
+> estaban legítimamente pendientes.
 
 ## Desvíos / deuda registrada
 

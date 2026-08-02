@@ -19,5 +19,12 @@ el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   - CI en matriz `ubuntu-latest` + `windows-latest`: Windows es el SO objetivo del producto y hasta ahora no se compilaba nunca.
   - Tests de la barrera de capas en `tests/integration/test_contratos_de_capas.py`: inyectan un import ilegal y verifican que `lint-imports` lo rechaza. Validados por mutación.
 
+- **Cierre documental de F0 (OZ-1).**
+  - `ADR-007 — Binding a wlanapi.dll mediante ctypes`, que materializa como ADR la decisión ya razonada en `plan-implementacion.md` §4.1. Gobierna la superficie más delicada del producto y F2 depende de ella.
+  - Templates de trabajo en `docs/templates/`: session log, tarjeta Jira y retro de fase.
+  - `docs/retros/` para las retros de fase.
+  - Session logs reconstruidos de S001 y S002, marcados explícitamente como reconstrucciones a posteriori desde el historial de git y no como registro contemporáneo.
+
 ### Corregido
 - Los contratos de `import-linter` se ejecutaban en CI pero nada demostraba que rechazasen una violación real; un contrato mal escrito habría pasado en verde indefinidamente (ADR-003).
+- Protección de rama en `main`: ambos checks de CI son obligatorios, lo que convierte la matriz en una barrera real en lugar de un informe.

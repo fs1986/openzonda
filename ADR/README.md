@@ -15,5 +15,6 @@ ADR" del diseño (§25) y son vinculantes para todos los agentes (ver `CLAUDE.md
 | [004](ADR-004-formato-wifisurvey.md) | Formato de proyecto `.wifisurvey` como ZIP autocontenido | Aceptado |
 | [005](ADR-005-captura-native-wifi.md) | Captura vía Native Wi-Fi API con parsing propio de IEs | Aceptado |
 | [006](ADR-006-honestidad-metrologica.md) | Honestidad metrológica como invariante de producto | Aceptado |
+| [007](ADR-007-binding-ctypes.md) | Binding a `wlanapi.dll` mediante `ctypes` | Aceptado |
 
 Para proponer una decisión nueva, copia [`template.md`](template.md).
