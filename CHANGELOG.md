@@ -14,3 +14,10 @@ el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   - Tooling: `pyproject.toml` con uv, ruff, mypy (strict en dominio y RF), pytest y contratos `import-linter`.
   - CI en GitHub Actions (lint, type-check, tests y contratos de capas).
   - Gobernanza OSS: `LICENSE` (Apache-2.0), `CONTRIBUTING`, `SECURITY`, `GOVERNANCE`.
+- **Hardening de CI (OZ-23).**
+  - `uv.lock` versionado (583 hashes `sha256`); CI usa `uv sync --locked`, que falla si el lock no concuerda con `pyproject.toml`.
+  - CI en matriz `ubuntu-latest` + `windows-latest`: Windows es el SO objetivo del producto y hasta ahora no se compilaba nunca.
+  - Tests de la barrera de capas en `tests/integration/test_contratos_de_capas.py`: inyectan un import ilegal y verifican que `lint-imports` lo rechaza. Validados por mutación.
+
+### Corregido
+- Los contratos de `import-linter` se ejecutaban en CI pero nada demostraba que rechazasen una violación real; un contrato mal escrito habría pasado en verde indefinidamente (ADR-003).
