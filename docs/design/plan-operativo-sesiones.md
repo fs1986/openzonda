@@ -299,11 +299,11 @@ manager del handle y política de degradación por timeouts.
 El callback solo señaliza un Event: security lo verifica.
 DoD de la sesión: [HW] Tú ejecutas el primer scan real: BSS con dBm en consola en tu equipo.
 
-### S013 · [OPENZONDA-13] CLI wsa-capture + primeros fixtures
+### S013 · [OPENZONDA-13] CLI oz-capture + primeros fixtures
 Objetivo: Herramienta de captura de fixtures (JSON+base64) que usarán los colegas.
 Subagentes: dev-core (líder), docs (guía de uso de 1 página), qa
 Instrucción de arranque para Claude Code:
-Sesión S013 / OPENZONDA-13. CLI wsa-capture: ejecuta el flujo,
+Sesión S013 / OPENZONDA-13. CLI oz-capture: ejecuta el flujo,
 serializa cada WLAN_BSS_ENTRY cruda + metadatos de NIC/driver
 a un JSON portable. docs redacta la guía que enviarás a
 colegas. Capturas tu primer fixture y se versiona en tests/.
