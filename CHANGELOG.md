@@ -25,6 +25,18 @@ el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   - `docs/retros/` para las retros de fase.
   - Session logs reconstruidos de S001 y S002, marcados explícitamente como reconstrucciones a posteriori desde el historial de git y no como registro contemporáneo.
 
+- **Walking skeleton de escritorio (OZ-3).**
+  - `MainWindow` PySide6 mínima, con geometría persistida entre sesiones.
+  - Composition root en `apps/openzonda` (ADR-008): único paquete que cablea adaptadores, de modo que la UI no importa infraestructura.
+  - `AppSettings` con esquema versionado y port `SettingsRepository`; adaptador JSON con escritura atómica. Un settings corrupto no impide arrancar; uno de esquema más nuevo no se sobrescribe.
+  - Modo portable detectado por `portable.marker`: config, logs y caché viven junto al ejecutable y nada se escribe en el perfil del usuario.
+  - Logging estructurado en JSON lines con rotación (10 MB, 5 copias), según diseño §19.
+  - Bundle PyInstaller onedir (112,8 MB) y `scripts/smoke_local.ps1`, que verifica tamaño, código de salida y validez del log.
+  - Nuevo contrato de capas: `application` declara ports y no conoce adaptadores.
+
+### Cambiado
+- Rutas de aplicación y códigos de error adoptan el nombre definitivo del producto: `%APPDATA%\OpenZonda\`, prefijo `OZD-` para errores (no `OZ-`, que colisiona con las claves de tarjeta) y CLI de fixtures `oz-capture`. El renombrado nunca se había propagado al diseño §18 y §19.
+
 ### Corregido
 - Los contratos de `import-linter` se ejecutaban en CI pero nada demostraba que rechazasen una violación real; un contrato mal escrito habría pasado en verde indefinidamente (ADR-003).
 - Protección de rama en `main`: ambos checks de CI son obligatorios, lo que convierte la matriz en una barrera real en lugar de un informe.
