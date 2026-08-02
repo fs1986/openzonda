@@ -13,9 +13,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, TypeVar
-
-T = TypeVar("T")
 
 
 class Provenance(Enum):
@@ -37,7 +34,7 @@ class Provenance(Enum):
 
 
 @dataclass(frozen=True, slots=True)
-class Measured(Generic[T]):
+class Measured[T]:
     """Un valor acompañado, de forma inseparable, de su procedencia.
 
     Al ser ``frozen`` no se puede mutar la procedencia tras la construcción:
@@ -51,7 +48,7 @@ class Measured(Generic[T]):
     def is_observed(self) -> bool:
         return self.provenance is Provenance.OBSERVED
 
-    def downgraded_to(self, provenance: Provenance) -> "Measured[T]":
+    def downgraded_to(self, provenance: Provenance) -> Measured[T]:
         """Devuelve una copia con procedencia de **menor** confianza.
 
         Degradar (p. ej. de OBSERVED a ESTIMATED) es legítimo cuando se
