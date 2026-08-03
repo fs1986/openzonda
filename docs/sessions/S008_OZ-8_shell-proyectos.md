@@ -97,10 +97,54 @@ Checklist en `docs/validacion/oz-8-validacion-vm.md`.
 | `ADR/ADR-010`, `ADR/ADR-011` | Decisiones estructurales |
 | `docs/validacion/oz-8-validacion-vm.md` | Checklist `[HW]` para el PO |
 
-## Validaciones [HW] pendientes del fundador
+## Validación [HW] del PO — VM Windows 11 build 26200, MSI 0.0.4 (2026-08-03)
 
-El flujo completo en la VM build 26200 (ver checklist). Hasta esa confirmación, OZ-8 queda en
-**In Review**, no en Done.
+Resultado: **4 de 5 verdes, 1 bloqueante corregido**. OZ-8 sigue en **In Review** hasta que el
+fix del dirty se mergee y el PO lo revalide.
+
+- ✅ **Ciclo de archivo desde el `.exe`** (crear→guardar→cerrar→reabrir). Con esto queda
+  **cerrada la diferida de OZ-6/OZ-7**: `importlib.resources` corrió en el binario congelado y
+  las migraciones se leyeron desde el bundle. Es la verificación que no se podía hacer en pytest.
+- ✅ **Recientes**: aparece al guardar; al mover el archivo se marca «no disponible» con ícono +
+  texto; «Quitar de recientes» la saca; sin borrado silencioso.
+- ✅ **Working dir huérfano** (observación directa de `%LOCALAPPDATA%\OpenZonda\cache\projects\`):
+  app cerrada → la ruta no existe; proyecto abierto → `<hash>\` con `data\survey.sqlite`,
+  `manifest.json`, `session.lock`; proceso matado desde el Administrador de tareas → carpeta
+  huérfana y `session.lock` pasa de 0 a 4 bytes; app reabierta → `projects\` vacía (el barrido
+  limpió). Comportamiento exacto del diseño.
+- ✅ **Modo oscuro**: correcto. Validado **en el host** (la VM no tiene el tema del SO activado),
+  registrado como validado fuera de VM.
+- ❌→✔ **BLOQUEANTE corregido — dirty por `editingFinished`**: el flag se marcaba solo al perder
+  el foco del campo Nombre; editar y cerrar con la X sin salir del campo perdía la edición sin el
+  diálogo «¿guardar?». Es justo el fallo que el flag previene. Corregido: `editingFinished` →
+  **`textEdited`** (marca el cambio en el acto). Se eligió `textEdited` y no un commit en
+  `closeEvent` porque el dirty debe ser correcto para *todos* los caminos que lo consultan
+  (cerrar, «Nuevo», «Abrir»), no solo el cierre; y `textEdited` —a diferencia de `textChanged`—
+  no se dispara con el `setText` de `mostrar()`, evitando un dirty falso al poblar el campo.
+  Test de regresión `test_editar_el_nombre_sin_perder_foco_marca_dirty` (falla con el código
+  viejo, pasa con el fix). Único campo editable en OZ-8: el Nombre; no hay otros. Fix en rama
+  aparte (no reabre el PR ya mergeado).
+
+### Escenarios observados (a vigilar, sin acción ahora)
+
+- **Guardado en OneDrive**: el proyecto de prueba se guardó en
+  `C:\Users\...\OneDrive\Documentos\` (el default de Documentos en Windows, común en usuarios).
+  El modelo documento (escritura atómica temporal + `os.replace`) **no dio problemas**. Se anota
+  porque OneDrive sincronizando durante un guardado es el tipo de interacción que reaparece como
+  bug raro más adelante.
+
+### Deuda de producto detectada en la validación
+
+- **i18n**: los botones de `QMessageBox` salen en inglés («Save/Discard/Cancel») porque son
+  `StandardButtons` de Qt y no se cargan los catálogos de traducción. Decisión del PO: **i18n real
+  es/en**, no parchear con texto hardcodeado. Tarjeta + **ADR-013** aparte, marcada `[HW]` (los
+  `.qm` en frozen son el mismo riesgo que `importlib.resources`). Interino: los botones quedan en
+  inglés en OZ-8, feo y consciente.
+
+## Validación [HW] pendiente
+
+Revalidar en la VM build 26200 el **flujo de dirty** con el MSI que incluya el fix (editar sin
+perder foco → cerrar → aparece el diálogo; y por «Nuevo»/«Abrir»). Recién ahí OZ-8 → Done.
 
 ## Próxima sesión sugerida
 

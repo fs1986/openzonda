@@ -290,7 +290,12 @@ class _ProyectoView(QWidget):
         self._on_rename = on_rename
         form = QFormLayout(self)
         self._nombre = QLineEdit()
-        self._nombre.editingFinished.connect(self._emitir_rename)
+        # `textEdited` (no `editingFinished`) marca el cambio en el acto: si se usara
+        # `editingFinished`, editar el nombre y cerrar con la X sin sacar el foco del campo
+        # dejaría dirty en False y perdería la edición sin avisar (OZ-8, hallazgo del PO). Y
+        # `textEdited` —a diferencia de `textChanged`— no se dispara con el `setText`
+        # programático de `mostrar()`, así que poblar el campo no marca un dirty falso.
+        self._nombre.textEdited.connect(lambda _texto: self._emitir_rename())
         self._ruta = QLabel()
         self._ruta.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         form.addRow("Nombre", self._nombre)
