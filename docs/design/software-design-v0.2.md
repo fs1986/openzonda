@@ -153,8 +153,10 @@ Reglas de dependencia (verificadas en CI con import-linter): UI → Application 
 - Cancelación cooperativa: todo trabajo largo acepta un token de cancelación; cerrar un proyecto cancela trabajos pendientes de forma limpia.
 
 ## 7.3 Estructura del repositorio
-wifi-survey-ai/
-  apps/desktop/            # entry point, UI, packaging hooks
+openzonda/
+  apps/
+    openzonda/             # composition root: __main__, cableado, logging (ADR-008)
+    desktop/               # UI PySide6: vistas y ViewModels, nada más
   packages/
     domain/                # entidades, value objects, ports
     application/           # casos de uso, servicios
@@ -167,11 +169,26 @@ wifi-survey-ai/
     interop/               # importadores de terceros / exportadores
     ai/                    # advisory layer (opcional)
     persistence/           # SQLite, migraciones, .wifisurvey
-  native/windows/          # adaptador Native WiFi (ctypes/pybind)
+  native/windows/          # adaptador Native WiFi (ctypes, ADR-007)
   tests/{unit,integration,rf,fixtures}/
-  docs/  packaging/windows/  scripts/
-  pyproject.toml  LICENSE  README.md  CONTRIBUTING.md
-  SECURITY.md  CHANGELOG.md  GOVERNANCE.md  ADR/
+  packaging/               # spec de PyInstaller, notas de release
+    windows/               # autoría WiX, script de MSI, icono
+  scripts/                 # verificación local (smoke test)
+  docs/{design,sessions,retros,templates}/
+  ADR/                     # decisiones de arquitectura, inmutables
+  .github/{workflows,ISSUE_TEMPLATE}/
+  pyproject.toml  uv.lock  LICENSE  README.md  BUILD.md
+  CONTRIBUTING.md  SECURITY.md  GOVERNANCE.md  CODE_OF_CONDUCT.md
+  CHANGELOG.md  CLAUDE.md
+
+**`apps/openzonda` y `apps/desktop` son dos paquetes distintos a propósito** (ADR-008).
+El contrato de capas prohíbe que la UI importe infraestructura, pero alguien tiene que
+instanciar los adaptadores concretos y conectarlos a los ports. Ese «alguien» es el
+composition root, y vive fuera de la UI para que la prohibición no necesite excepciones.
+`openzonda` es el único paquete autorizado a importar `persistence`, `wifi` y `windows`.
+
+La documentación vive **dentro de este repositorio**, no en uno separado: ver §2 del plan
+operativo.
 
 # 8. Modelo de dominio y esquema de datos
 
