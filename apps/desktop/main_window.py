@@ -92,14 +92,14 @@ class MainWindow(QMainWindow):
                 barra.addAction(act)
             return act
 
-        accion(
+        self._act_nuevo = accion(
             "&Nuevo",
             "Ctrl+N",
             self._vm.request_new,
             QStyle.StandardPixmap.SP_FileIcon,
             en_barra=True,
         )
-        accion(
+        self._act_abrir = accion(
             "&Abrir…",
             "Ctrl+O",
             lambda: self._vm.request_open(None),
@@ -125,17 +125,28 @@ class MainWindow(QMainWindow):
 
     def _al_cambiar_estado(self, state: ProjectState) -> None:
         self.setWindowTitle(self._vm.window_title)
-        self._act_guardar.setEnabled(state.has_project)
-        self._act_guardar_como.setEnabled(state.has_project)
-        self._act_cerrar.setEnabled(state.has_project)
+        # Durante una operación de I/O (abrir/guardar en el worker, OZ-34) se deshabilitan las
+        # acciones para no encolar trabajo mientras algo corre.
+        ocupado = state.busy
+        self._act_nuevo.setEnabled(not ocupado)
+        self._act_abrir.setEnabled(not ocupado)
+        self._act_guardar.setEnabled(state.has_project and not ocupado)
+        self._act_guardar_como.setEnabled(state.has_project and not ocupado)
+        self._act_cerrar.setEnabled(state.has_project and not ocupado)
+        self._menu_recientes.setEnabled(not ocupado)
 
         if state.has_project:
             self._stack.setCurrentWidget(self._proyecto)
             self._proyecto.mostrar(state)
+        else:
+            self._stack.setCurrentWidget(self._inicio)
+
+        if ocupado:
+            self.statusBar().showMessage("Trabajando…")
+        elif state.has_project:
             ruta = str(state.path) if state.path else "(sin guardar)"
             self.statusBar().showMessage(f"{state.name} — {ruta}")
         else:
-            self._stack.setCurrentWidget(self._inicio)
             self.statusBar().showMessage("Sin proyecto")
 
         self._inicio.mostrar_recientes(state)

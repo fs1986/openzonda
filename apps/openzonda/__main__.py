@@ -115,9 +115,13 @@ def main(argv: list[str] | None = None) -> int:
     huerfanos = store.cleanup_orphans()
     if huerfanos:
         logger.info("Limpiados %d working dirs de proyectos huérfanos", huerfanos)
-    project_service = ProjectService(store, repositorio)
 
+    # El I/O de abrir/guardar corre en un worker de Qt para no congelar la UI (OZ-34). El
+    # import es diferido, como el de la shell, para no cargar Qt antes del guard de baseline.
     from desktop.app import run_app
+    from desktop.qt_executor import QtTaskExecutor
+
+    project_service = ProjectService(store, repositorio, executor=QtTaskExecutor())
 
     try:
         return run_app(

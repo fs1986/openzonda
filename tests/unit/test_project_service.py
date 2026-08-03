@@ -73,6 +73,27 @@ class FakeProjectStore:
         return self.orphans_cleaned
 
 
+class DeferredExecutor:
+    """Executor de test que NO ejecuta en el acto: encola el trabajo y lo corre cuando el
+    test llama `run_all()`. Simula el worker para verificar `busy` y la cancelación."""
+
+    def __init__(self) -> None:
+        self.pending: list[tuple] = []
+
+    def submit(self, work, on_done, on_error) -> None:
+        self.pending.append((work, on_done, on_error))
+
+    def run_all(self) -> None:
+        while self.pending:
+            work, on_done, on_error = self.pending.pop(0)
+            try:
+                resultado = work()
+            except Exception as error:
+                on_error(error)
+            else:
+                on_done(resultado)
+
+
 class CapturingListener:
     def __init__(self) -> None:
         self.states: list[ProjectState] = []
@@ -252,3 +273,77 @@ def test_remove_recent_es_explicito(entorno, tmp_path: Path) -> None:
 
     service.remove_recent(ruta)
     assert service.state().recent == ()
+
+
+# ---------------------------------------------------------- worker / cancelación (OZ-34)
+
+
+def _servicio_diferido(tmp_path: Path) -> tuple[ProjectService, FakeProjectStore, DeferredExecutor]:
+    store = FakeProjectStore(tmp_path / "workspaces")
+    executor = DeferredExecutor()
+    service = ProjectService(store, FakeSettingsRepo(), executor=executor)
+    return service, store, executor
+
+
+def test_abrir_marca_busy_hasta_que_el_worker_termina(tmp_path: Path) -> None:
+    service, store, executor = _servicio_diferido(tmp_path)
+    destino = tmp_path / "p.wifisurvey"
+    # Sembrar un proyecto que el store pueda abrir.
+    ws = store.create_empty()
+    store.save(ws, Project(name="Sembrado"), destino)
+
+    service.open_project(destino)
+    assert service.is_busy is True  # el worker aún no corrió
+    assert service.state().busy is True
+
+    executor.run_all()
+    assert service.is_busy is False
+    assert service.has_project is True
+    assert service.state().name == "Sembrado"
+
+
+def test_cerrar_durante_una_apertura_descarta_el_resultado(tmp_path: Path) -> None:
+    service, store, executor = _servicio_diferido(tmp_path)
+    destino = tmp_path / "p.wifisurvey"
+    ws = store.create_empty()
+    store.save(ws, Project(name="Sembrado"), destino)
+
+    service.open_project(destino)  # encolado, no corrió
+    service.close_project()  # cancela: la generación avanza
+    executor.run_all()  # el worker termina tarde
+
+    assert service.has_project is False, "el resultado obsoleto no debe abrir el proyecto"
+    assert service.is_busy is False
+    # El working dir que abrió la operación obsoleta se limpió (no se filtra).
+    assert len(store.discarded) >= 1
+
+
+def test_abrir_otro_mientras_abre_descarta_el_primero(tmp_path: Path) -> None:
+    service, store, executor = _servicio_diferido(tmp_path)
+    a = tmp_path / "a.wifisurvey"
+    b = tmp_path / "b.wifisurvey"
+    ws = store.create_empty()
+    store.save(ws, Project(name="A"), a)
+    ws2 = store.create_empty()
+    store.save(ws2, Project(name="B"), b)
+
+    service.open_project(a)
+    service.open_project(b)  # segunda apertura: la primera queda obsoleta
+    executor.run_all()
+
+    assert service.has_project is True
+    assert service.state().name == "B", "debe quedar la última apertura, no la obsoleta"
+
+
+def test_guardar_corre_en_el_worker_y_marca_busy(tmp_path: Path) -> None:
+    service, _store, executor = _servicio_diferido(tmp_path)
+    service.new_project()  # síncrono (rápido)
+    service.rename("Editado")
+    assert service.is_dirty is True
+
+    service.save_as(tmp_path / "x.wifisurvey")
+    assert service.is_busy is True  # el guardado está encolado en el worker
+    executor.run_all()
+
+    assert service.is_busy is False
+    assert service.is_dirty is False

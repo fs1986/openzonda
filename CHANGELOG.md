@@ -6,6 +6,7 @@ el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 ## [No publicado]
 
 ### Añadido
+- **I/O de proyecto en un worker (OZ-34).** Abrir y guardar corren fuera del hilo de Qt (port `TaskExecutor` + adaptador `QtTaskExecutor` sobre `QThreadPool`), con la UI en «Trabajando…» y acciones deshabilitadas mientras corre. Cancelación **lógica**: cerrar o cambiar de proyecto descarta el resultado de una operación obsoleta (y limpia su working dir), sin abortar el I/O a mitad. Prepara la carga de planos grandes (F1.5) sin congelar la ventana.
 - **Shell de proyectos: crear/abrir/guardar/cerrar (OZ-8).**
   - Primera integración real dominio ↔ repositorio SQLite ↔ contenedor `.wifisurvey`: el *glue* que faltaba (deuda de OZ-6/OZ-7). Modelo **documento** (ADR-010): abrir extrae el `.wifisurvey` a un working dir; guardar re-empaqueta **atómico** sobre el archivo (temporal + rename), verificado con un kill-test a nivel del guardado.
   - Ventana única con vista central reemplazable (ADR-011): Inicio (crear/abrir/recientes con estado vacío) ↔ Proyecto, con menú/toolbar/barra de estado y atajos (Ctrl+N/O/S). El estado de UI vive en un **ViewModel testeable sin Qt**.
