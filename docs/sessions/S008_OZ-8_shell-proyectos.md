@@ -141,10 +141,19 @@ fix del dirty se mergee y el PO lo revalide.
   `.qm` en frozen son el mismo riesgo que `importlib.resources`). Interino: los botones quedan en
   inglés en OZ-8, feo y consciente.
 
-## Validación [HW] pendiente
+## Revalidación [HW] del fix — VM build 26200, MSI 0.0.5 (2026-08-03): TODO VERDE
 
-Revalidar en la VM build 26200 el **flujo de dirty** con el MSI que incluya el fix (editar sin
-perder foco → cerrar → aparece el diálogo; y por «Nuevo»/«Abrir»). Recién ahí OZ-8 → Done.
+- **Smoke**: la app abre; crear + guardar OK con 0.0.5.
+- **Dirty (fix confirmado)**: al editar el Nombre la `•` aparece en el acto, sin sacar el foco;
+  al cerrar, pregunta si guardar.
+- **Persistencia tras editar-sin-foco**: editar el Nombre sin sacar foco → guardar → cerrar →
+  reabrir → persiste el nombre **editado**, no el viejo.
+- **Working dir huérfano (re-verificado)**: huérfano previo (`b22661a7…`, lock 4 b) + sesión viva
+  (`c0bc0d02…`, lock 0 b); al matar el proceso el lock pasó a 4 b; al reabrir, `projects\` quedó
+  vacía. El barrido limpió ambos.
+
+**VERDICT: PASS.** OZ-8 → **Done**. Con esto quedan cerradas F1.4 y las verificaciones diferidas
+de OZ-6/OZ-7 (incluido `importlib.resources` en frozen).
 
 ## Próxima sesión sugerida
 
