@@ -6,15 +6,19 @@ import logging
 import sys
 from pathlib import Path
 
+from application.project_service import ProjectService
 from application.settings import AppSettings, SettingsRepository
 from openzonda.baseline import enforce_baseline
 from openzonda.logging_setup import setup_logging
 from openzonda.version import app_version
 from persistence.app_paths import AppPaths, resolve_app_paths
+from persistence.project_store import WifiSurveyProjectStore
 from persistence.settings_json import (
     JsonSettingsRepository,
     UnsupportedSettingsSchemaError,
 )
+
+WORKSPACES_DIRNAME = "projects"
 
 
 class ReadOnlySettingsRepository:
@@ -104,10 +108,20 @@ def main(argv: list[str] | None = None) -> int:
     repositorio, settings = build_settings_repository(paths, logger)
     logger.setLevel(settings.log_level)
 
+    # Adaptador de proyecto (OZ-8). Los working dirs de proyectos abiertos viven bajo la
+    # caché; barrer los huérfanos de sesiones muertas al arrancar libera espacio sin tocar
+    # los de otra instancia viva.
+    store = WifiSurveyProjectStore(paths.cache_dir / WORKSPACES_DIRNAME, version)
+    huerfanos = store.cleanup_orphans()
+    if huerfanos:
+        logger.info("Limpiados %d working dirs de proyectos huérfanos", huerfanos)
+    project_service = ProjectService(store, repositorio)
+
     from desktop.app import run_app
 
     try:
         return run_app(
+            project_service,
             repositorio,
             version,
             argumentos,

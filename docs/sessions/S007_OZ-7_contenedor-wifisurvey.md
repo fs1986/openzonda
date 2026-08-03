@@ -190,6 +190,37 @@ Ninguna. El contenedor no depende de hardware.
 - Verificación diferida heredada de OZ-6: el camino de `importlib.resources` desde el
   ejecutable congelado sigue sin ejercitarse hasta F1.4.
 
+## Verificación de cierre (Regla A) — 2026-08-03
+
+La tarjeta quedó en *In Progress* pese a estar el PR mergeado (#12). Antes de moverla se
+re-verificó su DoD contra `main` (tip `8f2750e`; contenedor en `60ac4ee`) con evidencia
+fresca, sin confiar solo en el registro contemporáneo de arriba.
+
+| Punto del DoD | Comando | Resultado |
+| --- | --- | --- |
+| Round-trip idéntico por hash | `pytest test_container.py -k "RoundTrip or Determinismo or hash"` | **7 passed** |
+| kill-test sin corrupción | `pytest test_container.py -k Kill` | **2 passed** |
+| 3 fixtures hostiles rechazados | `pytest test_container_hostile.py` | **30 passed** (8 familias, supera el mínimo de 3) |
+| (extra) Escritura atómica | `pytest test_container.py -k Atomica` | **3 passed** |
+| Suite completa del contenedor | `pytest test_container.py test_container_hostile.py` | **47 passed, 0 failed** |
+
+*Interpretación de "Round-trip idéntico por hash":* es el roundtrip del **contenedor**
+(`write_container` → `read_container`, bytes/hash idénticos), que es el alcance de OZ-7
+(objetivo: contenedor `.wifisurvey`, escritura atómica, anti path-traversal). El roundtrip
+**end-to-end contenedor↔repositorio SQLite** NO es un punto de este DoD.
+
+*Verificaciones diferidas — NO pertenecen al DoD de OZ-7; se cierran en OZ-8:*
+
+1. Pegamento contenedor↔repositorio (OZ-6): `write_container` recibe una base ya construida;
+   quién la construye y el roundtrip real proyecto→contenedor→proyecto es trabajo de la shell.
+2. `importlib.resources` desde el ejecutable congelado (heredada de OZ-6): sin ejercitar
+   hasta que la shell abra/guarde un proyecto real.
+
+Ambas quedan **enganchadas explícitamente al DoD de OZ-8**.
+
+*Decisión:* los tres puntos del DoD de OZ-7 están cumplidos con evidencia → **Done**. Las
+diferidas son de OZ-8, no condición de este cierre.
+
 ## Próxima sesión sugerida
 
 **OZ-8 · S008 · Shell UI: proyectos [HW]**, que es donde el contenedor, el repositorio y el

@@ -5,11 +5,13 @@ from __future__ import annotations
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
+from application.project_service import ProjectService
 from application.settings import SettingsRepository
 from desktop.main_window import MainWindow
 
 
 def run_app(
+    project_service: ProjectService,
     settings_repository: SettingsRepository,
     app_version: str,
     argv: list[str] | None = None,
@@ -21,7 +23,11 @@ def run_app(
     arranque que se verifica es el real —event loop incluido— y no una simulación.
     """
     app = QApplication.instance() or QApplication(argv or [])
-    ventana = MainWindow(settings_repository=settings_repository, app_version=app_version)
+    ventana = MainWindow(
+        project_service=project_service,
+        settings_repository=settings_repository,
+        app_version=app_version,
+    )
     ventana.show()
 
     if autoclose_ms is not None:

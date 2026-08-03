@@ -70,6 +70,7 @@ class JsonSettingsRepository:
             "window_geometry": (
                 list(settings.window_geometry) if settings.window_geometry else None
             ),
+            "recent_projects": list(settings.recent_projects),
         }
 
         # Escritura atómica: un corte de luz deja el archivo anterior intacto, nunca uno
@@ -82,12 +83,15 @@ class JsonSettingsRepository:
 
     @staticmethod
     def _desde_dict(datos: dict[str, Any]) -> AppSettings:
+        # Migración v1→v2 (aditiva): un settings v1 no trae `recent_projects`; `_recientes`
+        # lo resuelve a `()` sin perder los demás campos ni pedirle nada al usuario.
         try:
             return AppSettings(
                 schema_version=SETTINGS_SCHEMA_VERSION,
                 language=datos.get("language", "es"),
                 log_level=datos.get("log_level", "INFO"),
                 window_geometry=_geometria(datos.get("window_geometry")),
+                recent_projects=_recientes(datos.get("recent_projects")),
             )
         except (ValueError, TypeError):
             # Valor fuera de rango o de tipo inesperado: defaults antes que un crash.
@@ -101,3 +105,11 @@ def _geometria(valor: object) -> tuple[int, int, int, int] | None:
         x, y, ancho, alto = valor  # type: ignore[misc]
         return (x, y, ancho, alto)
     return None
+
+
+def _recientes(valor: object) -> tuple[str, ...]:
+    """Lista de rutas recientes. Ignora lo que no sea texto en vez de reventar: un settings
+    manipulado a mano no debe impedir arrancar."""
+    if not isinstance(valor, list | tuple):
+        return ()
+    return tuple(v for v in valor if isinstance(v, str))

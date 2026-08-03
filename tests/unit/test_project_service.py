@@ -1,0 +1,254 @@
+"""Contrato del ciclo de vida del proyecto (OZ-8), verificado sin Qt ni infraestructura.
+
+El servicio se prueba contra un `FakeProjectStore` en memoria: aquí importa la LÓGICA del
+documento (dirty, recientes, orden de operaciones, manejo de errores por listener), no cómo
+se serializa un `.wifisurvey` —eso lo cubre el test del adapter de `persistence`.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from application.project_service import (
+    DEFAULT_PROJECT_NAME,
+    ProjectErrorKind,
+    ProjectService,
+    ProjectState,
+    ProjectStoreError,
+    ProjectWorkspace,
+)
+from application.settings import AppSettings
+from domain.project import Project
+
+
+class FakeSettingsRepo:
+    def __init__(self) -> None:
+        self._settings = AppSettings()
+
+    def load(self) -> AppSettings:
+        return self._settings
+
+    def save(self, settings: AppSettings) -> None:
+        self._settings = settings
+
+
+class FakeProjectStore:
+    """Store en memoria. `save` toca el archivo destino para que `Path.exists()` (recientes
+    rotos) refleje la realidad, pero el contenido del proyecto vive en un dict."""
+
+    def __init__(self, root: Path) -> None:
+        self._root = root
+        self._n = 0
+        self.saved: dict[Path, Project] = {}
+        self.discarded: list[ProjectWorkspace] = []
+        self.orphans_cleaned = 0
+
+    def create_empty(self) -> ProjectWorkspace:
+        self._n += 1
+        ws_dir = self._root / f"ws{self._n}"
+        ws_dir.mkdir(parents=True, exist_ok=True)
+        return ProjectWorkspace(working_dir=ws_dir)
+
+    def open(self, source: Path) -> tuple[ProjectWorkspace, Project]:
+        source = Path(source).resolve()
+        if source not in self.saved:
+            raise ProjectStoreError(ProjectErrorKind.CORRUPT, f"no legible: {source}")
+        self._n += 1
+        ws_dir = self._root / f"ws{self._n}"
+        ws_dir.mkdir(parents=True, exist_ok=True)
+        return ProjectWorkspace(working_dir=ws_dir), self.saved[source]
+
+    def save(self, workspace: ProjectWorkspace, project: Project, destination: Path) -> None:
+        destination = Path(destination).resolve()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"fake-wifisurvey")
+        self.saved[destination] = project
+
+    def discard(self, workspace: ProjectWorkspace) -> None:
+        self.discarded.append(workspace)
+
+    def cleanup_orphans(self) -> int:
+        return self.orphans_cleaned
+
+
+class CapturingListener:
+    def __init__(self) -> None:
+        self.states: list[ProjectState] = []
+        self.errors: list[ProjectStoreError] = []
+
+    def on_state(self, state: ProjectState) -> None:
+        self.states.append(state)
+
+    def on_error(self, error: ProjectStoreError) -> None:
+        self.errors.append(error)
+
+
+@pytest.fixture
+def entorno(tmp_path: Path) -> tuple[ProjectService, FakeProjectStore, CapturingListener]:
+    store = FakeProjectStore(tmp_path / "workspaces")
+    service = ProjectService(store, FakeSettingsRepo())
+    listener = CapturingListener()
+    service.add_listener(listener)
+    return service, store, listener
+
+
+def test_proyecto_nuevo_queda_dirty_y_sin_ruta(entorno) -> None:
+    service, _store, listener = entorno
+    service.new_project()
+
+    estado = service.state()
+    assert estado.has_project is True
+    assert estado.name == DEFAULT_PROJECT_NAME
+    assert estado.path is None
+    assert estado.dirty is True
+    assert listener.states[-1] == estado  # el listener fue notificado
+
+
+def test_add_listener_recibe_el_estado_inicial(entorno) -> None:
+    _service, _store, listener = entorno
+    assert listener.states[0].has_project is False  # sin proyecto al arrancar
+
+
+def test_save_sin_ruta_es_error_de_programacion(entorno) -> None:
+    service, _store, _listener = entorno
+    service.new_project()
+    with pytest.raises(ValueError):
+        service.save()  # el ViewModel debe usar save_as() cuando no hay ruta
+
+
+def test_guardar_como_persiste_y_limpia_dirty(entorno, tmp_path: Path) -> None:
+    service, store, _listener = entorno
+    service.new_project()
+    destino = tmp_path / "estudio.wifisurvey"
+
+    service.save_as(destino)
+
+    estado = service.state()
+    assert estado.dirty is False
+    assert estado.path == destino
+    assert store.saved[destino.resolve()].name == DEFAULT_PROJECT_NAME
+    assert estado.recent[0].path == destino.resolve()
+    assert estado.recent[0].available is True
+
+
+def test_guardar_tras_guardar_como_usa_la_misma_ruta(entorno, tmp_path: Path) -> None:
+    service, store, _listener = entorno
+    service.new_project()
+    destino = tmp_path / "estudio.wifisurvey"
+    service.save_as(destino)
+
+    service.rename("Torre Norte")
+    assert service.is_dirty is True
+    service.save()  # ya hay ruta: no debe requerir save_as
+
+    assert service.is_dirty is False
+    assert store.saved[destino.resolve()].name == "Torre Norte"
+
+
+def test_abrir_proyecto_existente(entorno, tmp_path: Path) -> None:
+    service, _store, _listener = entorno
+    destino = tmp_path / "estudio.wifisurvey"
+    service.new_project()
+    service.rename("Planta Baja")
+    service.save_as(destino)
+    service.close_project()
+
+    service.open_project(destino)
+
+    estado = service.state()
+    assert estado.has_project is True
+    assert estado.name == "Planta Baja"
+    assert estado.path == destino
+    assert estado.dirty is False
+
+
+def test_abrir_archivo_inexistente_emite_error_not_found(entorno, tmp_path: Path) -> None:
+    service, _store, listener = entorno
+    service.open_project(tmp_path / "no-existe.wifisurvey")
+
+    assert listener.errors[-1].kind is ProjectErrorKind.NOT_FOUND
+    assert service.has_project is False  # el estado no cambió
+
+
+def test_abrir_archivo_corrupto_emite_error_sin_relanzar(entorno, tmp_path: Path) -> None:
+    service, _store, listener = entorno
+    corrupto = tmp_path / "roto.wifisurvey"
+    corrupto.write_bytes(b"no soy un contenedor")
+
+    service.open_project(corrupto)  # no debe lanzar
+
+    assert listener.errors[-1].kind is ProjectErrorKind.CORRUPT
+    assert service.has_project is False
+
+
+def test_renombrar_marca_dirty(entorno) -> None:
+    service, _store, _listener = entorno
+    service.new_project()
+    service.rename("Nuevo nombre")
+    assert service.state().name == "Nuevo nombre"
+    assert service.is_dirty is True
+
+
+def test_cerrar_libera_el_workspace(entorno) -> None:
+    service, store, _listener = entorno
+    service.new_project()
+    ws = service._current.workspace  # type: ignore[union-attr]
+    service.close_project()
+
+    assert ws in store.discarded
+    assert service.has_project is False
+
+
+def test_nuevo_proyecto_descarta_el_anterior(entorno) -> None:
+    service, store, _listener = entorno
+    service.new_project()
+    primero = service._current.workspace  # type: ignore[union-attr]
+    service.new_project()
+
+    assert primero in store.discarded
+
+
+def test_recientes_orden_dedup_y_limite(entorno, tmp_path: Path) -> None:
+    service, _store, _listener = entorno
+    # Guardar 12 proyectos distintos; recientes se limita a 10, más reciente primero.
+    rutas = [tmp_path / f"p{i}.wifisurvey" for i in range(12)]
+    for ruta in rutas:
+        service.new_project()
+        service.save_as(ruta)
+
+    recientes = [e.path for e in service.state().recent]
+    assert len(recientes) == 10
+    assert recientes[0] == rutas[-1].resolve()  # el último guardado, primero
+    assert rutas[0].resolve() not in recientes  # el más viejo se cayó del tope
+
+    # Reabrir uno viejo lo mueve al frente sin duplicar.
+    service.close_project()
+    service.open_project(rutas[5])
+    recientes = [e.path for e in service.state().recent]
+    assert recientes[0] == rutas[5].resolve()
+    assert recientes.count(rutas[5].resolve()) == 1
+
+
+def test_reciente_roto_se_marca_no_disponible_no_se_borra(entorno, tmp_path: Path) -> None:
+    service, _store, _listener = entorno
+    ruta = tmp_path / "movido.wifisurvey"
+    service.new_project()
+    service.save_as(ruta)
+    ruta.unlink()  # el usuario movió/borró el archivo
+
+    recientes = service.state().recent
+    assert recientes[0].path == ruta.resolve()
+    assert recientes[0].available is False  # sigue en la lista, marcado no disponible
+
+
+def test_remove_recent_es_explicito(entorno, tmp_path: Path) -> None:
+    service, _store, _listener = entorno
+    ruta = tmp_path / "quitar.wifisurvey"
+    service.new_project()
+    service.save_as(ruta)
+    assert len(service.state().recent) == 1
+
+    service.remove_recent(ruta)
+    assert service.state().recent == ()

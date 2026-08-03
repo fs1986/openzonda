@@ -13,7 +13,11 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Protocol
 
-SETTINGS_SCHEMA_VERSION = 1
+# v2 (OZ-8): añade `recent_projects`. La migración v1→v2 es aditiva —un settings v1 no trae
+# el campo y se rellena con `()`—, así que preserva todo sin pedir nada al usuario. Un binario
+# v1 que lea un settings v2 lo rechaza por "esquema más nuevo" (JsonSettingsRepository) y el
+# composition root arranca con defaults sin sobrescribir: degrada, no crashea.
+SETTINGS_SCHEMA_VERSION = 2
 
 SUPPORTED_LANGUAGES = frozenset({"es", "en"})
 VALID_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
@@ -27,6 +31,8 @@ class AppSettings:
     language: str = "es"
     log_level: str = "INFO"
     window_geometry: tuple[int, int, int, int] | None = None
+    recent_projects: tuple[str, ...] = ()
+    """Rutas de proyectos abiertos recientemente, más reciente primero (OZ-8)."""
 
     def __post_init__(self) -> None:
         if self.language not in SUPPORTED_LANGUAGES:
