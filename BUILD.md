@@ -21,7 +21,7 @@ builds dejarían de ser reproducibles.
 ## Entorno de desarrollo
 
 ```bash
-git clone https://github.com/fs1986/openzonda.git
+git clone https://github.com/openzonda/openzonda.git
 cd openzonda
 uv sync --locked --group dev --extra ui
 ```

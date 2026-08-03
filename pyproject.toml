@@ -18,6 +18,16 @@ dependencies = [
 ui = ["PySide6>=6.7"]
 science = ["scipy>=1.14", "matplotlib>=3.9", "pillow>=10.4"]
 
+# Va después de las claves sueltas de [project]: en TOML, una cabecera de tabla cierra la
+# sección anterior, así que declarar [project.urls] antes de `dependencies` haría que ese
+# array pasara a pertenecer a project.urls y el build fallaría.
+[project.urls]
+Homepage = "https://github.com/openzonda/openzonda"
+Repository = "https://github.com/openzonda/openzonda"
+Issues = "https://github.com/openzonda/openzonda/issues"
+Changelog = "https://github.com/openzonda/openzonda/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/openzonda/openzonda/blob/main/BUILD.md"
+
 [dependency-groups]
 dev = [
     "pytest>=8.3",

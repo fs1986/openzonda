@@ -2,6 +2,7 @@
 
 **Site surveys WiFi de nivel profesional, open source, para Windows 10/11 — sin hardware propietario.**
 
+[![CI](https://github.com/openzonda/openzonda/actions/workflows/ci.yml/badge.svg)](https://github.com/openzonda/openzonda/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Estado](https://img.shields.io/badge/estado-F1%20en%20curso-orange)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows%2010%2F11%20x64-informational)
@@ -41,7 +42,7 @@ OpenZonda no promete lo que el stack WLAN de Windows no puede dar:
 
 ## Instalación
 
-Descarga el instalador `.msi` de la [última release](https://github.com/fs1986/openzonda/releases).
+Descarga el instalador `.msi` de la [última release](https://github.com/openzonda/openzonda/releases).
 Es **per-user**: no pide permisos de administrador y se instala en
 `%LOCALAPPDATA%\Programs\OpenZonda`. No toca tus proyectos ni tu configuración.
 
