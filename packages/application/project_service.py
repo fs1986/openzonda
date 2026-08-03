@@ -85,6 +85,18 @@ class ProjectStore(Protocol):
         """Persiste `project` en el working dir y re-empaqueta atómico sobre `destination`."""
         ...
 
+    def store_asset(self, workspace: ProjectWorkspace, data: bytes, extension: str) -> str:
+        """Guarda `data` en el working dir *content-addressed* (`assets/<sha256>.<ext>`) y
+        devuelve su sha256. Dedup por hash: el mismo contenido no se reescribe. La extensión
+        la fija el llamante a partir del formato detectado por contenido, no del nombre del
+        archivo del usuario (OZ-9a)."""
+        ...
+
+    def read_asset(self, workspace: ProjectWorkspace, sha256: str) -> bytes:
+        """Devuelve los bytes del asset por su hash. Lanza `ProjectStoreError` si no está:
+        un plano referenciado que falta es un documento corrupto, no un caso normal."""
+        ...
+
     def discard(self, workspace: ProjectWorkspace) -> None:
         """Cierra el proyecto y borra su working dir. Idempotente."""
         ...

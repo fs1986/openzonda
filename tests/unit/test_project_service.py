@@ -7,6 +7,7 @@ se serializa un `.wifisurvey` —eso lo cubre el test del adapter de `persistenc
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -44,6 +45,7 @@ class FakeProjectStore:
         self.saved: dict[Path, Project] = {}
         self.discarded: list[ProjectWorkspace] = []
         self.orphans_cleaned = 0
+        self.assets: dict[str, bytes] = {}
 
     def create_empty(self) -> ProjectWorkspace:
         self._n += 1
@@ -65,6 +67,16 @@ class FakeProjectStore:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(b"fake-wifisurvey")
         self.saved[destination] = project
+
+    def store_asset(self, workspace: ProjectWorkspace, data: bytes, extension: str) -> str:
+        sha = hashlib.sha256(data).hexdigest()
+        self.assets[sha] = data
+        return sha
+
+    def read_asset(self, workspace: ProjectWorkspace, sha256: str) -> bytes:
+        if sha256 not in self.assets:
+            raise ProjectStoreError(ProjectErrorKind.CORRUPT, f"asset ausente: {sha256}")
+        return self.assets[sha256]
 
     def discard(self, workspace: ProjectWorkspace) -> None:
         self.discarded.append(workspace)

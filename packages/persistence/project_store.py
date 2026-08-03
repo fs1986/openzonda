@@ -29,7 +29,9 @@ seguro para los propios working dirs, que se saltan por estar registrados en mem
 
 from __future__ import annotations
 
+import hashlib
 import os
+import re
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -60,6 +62,8 @@ from persistence.database import (
 from persistence.project_repository import SQLiteProjectRepository
 
 LOCK_NAME = "session.lock"
+ASSETS_DIRNAME = "assets"
+_SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 
 
 class WifiSurveyProjectStore:
@@ -123,7 +127,7 @@ class WifiSurveyProjectStore:
             write_container(
                 destination,
                 database=db,
-                assets={},
+                assets=self._recoger_assets(workspace.working_dir),
                 app_version=self._app_version,
                 schema_version=SCHEMA_VERSION,
                 _before_rename=_before_rename,
@@ -132,6 +136,57 @@ class WifiSurveyProjectStore:
             raise ProjectStoreError(ProjectErrorKind.CORRUPT, str(e)) from e
         except OSError as e:
             raise ProjectStoreError(ProjectErrorKind.IO, str(e)) from e
+
+    # ------------------------------------------------------------------------- assets
+
+    def store_asset(self, workspace: ProjectWorkspace, data: bytes, extension: str) -> str:
+        """Guarda un asset *content-addressed* y devuelve su sha256.
+
+        El nombre en disco es `assets/<sha256>.<ext>`: el hash del **contenido** identifica el
+        archivo, así que dos cargas del mismo plano (aunque el usuario los renombre distinto)
+        colapsan en una sola entrada. La extensión la fija el llamante desde el formato
+        detectado por magic bytes, nunca desde el nombre del archivo de origen (OZ-9a).
+        """
+        sha = hashlib.sha256(data).hexdigest()
+        ext = "".join(c for c in extension.lower() if c.isalnum())
+        assets_dir = workspace.working_dir / ASSETS_DIRNAME
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        destino = assets_dir / f"{sha}.{ext}"
+        if not destino.exists():  # dedup: mismo contenido -> mismo nombre -> no reescribir
+            # Escritura vía temporal + replace: un corte a mitad no deja un asset truncado
+            # con el nombre de su hash (que luego se creería íntegro).
+            temporal = assets_dir / f".{sha}.{uuid4().hex}.tmp"
+            temporal.write_bytes(data)
+            os.replace(temporal, destino)
+        return sha
+
+    def read_asset(self, workspace: ProjectWorkspace, sha256: str) -> bytes:
+        """Devuelve los bytes del asset por su hash. Falta = documento corrupto."""
+        if not _SHA256_HEX.match(sha256):
+            raise ProjectStoreError(
+                ProjectErrorKind.CORRUPT, f"Hash de asset inválido: {sha256!r}."
+            )
+        assets_dir = workspace.working_dir / ASSETS_DIRNAME
+        if assets_dir.is_dir():
+            for entrada in assets_dir.glob(f"{sha256}.*"):
+                if entrada.is_file():
+                    return entrada.read_bytes()
+        raise ProjectStoreError(
+            ProjectErrorKind.CORRUPT,
+            f"El plano {sha256[:12]}… no está embebido en el proyecto.",
+        )
+
+    def _recoger_assets(self, ws_dir: Path) -> dict[str, Path]:
+        """Mapa `nombre -> ruta` de los assets del working dir, para empaquetar. Ignora los
+        temporales de un `store_asset` que muriera a mitad."""
+        assets_dir = ws_dir / ASSETS_DIRNAME
+        if not assets_dir.is_dir():
+            return {}
+        return {
+            p.name: p
+            for p in sorted(assets_dir.iterdir())
+            if p.is_file() and not p.name.endswith(".tmp")
+        }
 
     def discard(self, workspace: ProjectWorkspace) -> None:
         self._descartar_dir(workspace.working_dir)
