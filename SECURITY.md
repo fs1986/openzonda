@@ -3,7 +3,7 @@
 ## Reportar una vulnerabilidad
 
 Por favor **no** abras un issue público para vulnerabilidades. Usa los
-[GitHub Security Advisories](https://github.com/fs1986/openzonda/security/advisories/new)
+[GitHub Security Advisories](https://github.com/openzonda/openzonda/security/advisories/new)
 del repositorio para un reporte privado. Intentamos responder en un plazo razonable
 y coordinar la divulgación.
 
