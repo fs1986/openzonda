@@ -6,6 +6,13 @@ el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 ## [No publicado]
 
 ### Añadido
+- **Persistencia SQLite (OZ-6).**
+  - Runner de migraciones con numeración lineal y **una transacción por migración**: si la quinta falla, las cuatro anteriores quedan confirmadas y reabrir el proyecto reintenta solo desde donde se cortó.
+  - Esquema inicial según diseño §8.2, con tablas `STRICT` — SQLite acepta por defecto texto en una columna `INTEGER`, y eso contradice el invariante de honestidad del dato.
+  - **Apertura defensiva** de todo proyecto, sin opción de desactivarla: `trusted_schema=OFF` impide que un esquema hostil ejecute funciones desde vistas o triggers; `foreign_keys=ON` porque SQLite las trae apagadas; WAL para que la UI dibuje mientras se captura.
+  - Abrir un proyecto de una versión más nueva **falla sin tocar el archivo**, diciendo qué versión trae y cuál se entiende.
+  - `SQLiteProjectRepository`: guardar reemplaza el estado completo en lugar de acumular, para que borrar un sitio lo borre de verdad.
+  - Las migraciones viajan en el bundle: son `.sql`, y el análisis de imports de PyInstaller no las habría visto.
 - **Núcleo de dominio de F1 (OZ-5).**
   - Value objects de unidades con álgebra real: `dBm - dBm → dB` (eso es un SNR), `dBm ± dB → dBm` (atenuar), `dB + dB → dB` (atenuaciones acumuladas). Sumar dos dBm es `TypeError`, porque no significa nada físicamente. Mezclar píxeles con metros, tampoco.
   - **«No disponible» como tipo de primera clase**: `Unavailable` lleva su motivo y **no tiene atributo `value`**, así que el código que intente leer un número inexistente falla en lugar de inventarlo. `Reading[T] = Measured[T] | Unavailable` obliga a distinguir ambos casos.
