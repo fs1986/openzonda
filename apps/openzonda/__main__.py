@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from application.settings import AppSettings, SettingsRepository
+from openzonda.baseline import enforce_baseline
 from openzonda.logging_setup import setup_logging
 from openzonda.version import app_version
 from persistence.app_paths import AppPaths, resolve_app_paths
@@ -58,6 +59,10 @@ def build_settings_repository(
         return ReadOnlySettingsRepository(por_defecto, logger), por_defecto
 
 
+# Código de salida cuando el SO está por debajo del baseline de ADR-001 (OZ-33). Distinto
+# de 1 para que el instalador/scripts puedan distinguir "SO no soportado" de un fallo genérico.
+EXIT_UNSUPPORTED_WINDOWS = 3
+
 SMOKE_FLAG = "--smoke"
 SMOKE_DEFAULT_MS = 1500
 
@@ -89,6 +94,12 @@ def main(argv: list[str] | None = None) -> int:
         "portable" if paths.portable else "instalado",
         paths.settings_file,
     )
+
+    # Guard de baseline (OZ-33): negarse a arrancar por debajo del build soportado, leyendo
+    # la versión por una vía que no miente. También cubre el modo portable, que no pasa por
+    # el preflight del instalador.
+    if not enforce_baseline(logger):
+        return EXIT_UNSUPPORTED_WINDOWS
 
     repositorio, settings = build_settings_repository(paths, logger)
     logger.setLevel(settings.log_level)
