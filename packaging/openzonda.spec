@@ -182,7 +182,15 @@ a = Analysis(
         str(REPO_ROOT / "packages"),
     ],
     binaries=[],
-    datas=[],
+    # Las migraciones son archivos .sql, no módulos: el análisis de imports de PyInstaller
+    # no las ve y el bundle arrancaría sin ellas. `discover_migrations()` fallaría al abrir
+    # el primer proyecto, ya en la máquina del usuario y no en CI.
+    datas=[
+        (
+            str(REPO_ROOT / "packages" / "persistence" / "migrations" / "*.sql"),
+            "persistence/migrations",
+        ),
+    ],
     hiddenimports=["desktop.app", "desktop.main_window"],
     hookspath=[],
     hooksconfig={},
