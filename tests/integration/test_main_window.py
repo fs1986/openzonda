@@ -25,6 +25,7 @@ pytest.importorskip("PySide6", reason="la UI es un extra opcional (extra 'ui')")
 # Debe fijarse antes de instanciar QApplication.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from desktop.main_window import MainWindow
@@ -138,6 +139,28 @@ def test_al_crear_un_proyecto_se_muestra_la_vista_de_proyecto(
     ventana._vm.request_new()  # type: ignore[attr-defined]
 
     assert ventana._stack.currentWidget() is not inicio  # cambió de Inicio a Proyecto
+    ventana.close()
+
+
+def test_editar_el_nombre_sin_perder_foco_marca_dirty(qt_app: QApplication, tmp_path: Path) -> None:
+    """Regresión (OZ-8, hallazgo del PO): editar el Nombre y cerrar con la X sin sacar el
+    foco del campo debe quedar *dirty* — si no, se pierde la edición sin el diálogo de
+    «¿guardar?». Antes se marcaba con `editingFinished` (solo al perder foco) y se perdía."""
+    repo = RepositorioFalso()
+    service = ProjectService(StoreFalso(tmp_path / "projects"), repo)
+    service.new_project()
+    service.save_as(tmp_path / "p.wifisurvey")  # deja el documento limpio (dirty = False)
+    assert service.is_dirty is False
+    ventana = MainWindow(project_service=service, settings_repository=repo, app_version="1.2.3")
+    ventana.show()
+
+    # Tecleo real en el campo Nombre, SIN disparar editingFinished (no se pierde el foco).
+    campo = ventana._proyecto._nombre  # type: ignore[attr-defined]
+    campo.setFocus()
+    QTest.keyClicks(campo, "X")
+
+    assert service.is_dirty is True, "editar el nombre debe marcar dirty aunque no se pierda foco"
+    assert ventana.windowTitle().startswith("• ")
     ventana.close()
 
 
