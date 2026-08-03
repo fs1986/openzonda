@@ -6,6 +6,12 @@ el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 ## [No publicado]
 
 ### Añadido
+- **Shell de proyectos: crear/abrir/guardar/cerrar (OZ-8).**
+  - Primera integración real dominio ↔ repositorio SQLite ↔ contenedor `.wifisurvey`: el *glue* que faltaba (deuda de OZ-6/OZ-7). Modelo **documento** (ADR-010): abrir extrae el `.wifisurvey` a un working dir; guardar re-empaqueta **atómico** sobre el archivo (temporal + rename), verificado con un kill-test a nivel del guardado.
+  - Ventana única con vista central reemplazable (ADR-011): Inicio (crear/abrir/recientes con estado vacío) ↔ Proyecto, con menú/toolbar/barra de estado y atajos (Ctrl+N/O/S). El estado de UI vive en un **ViewModel testeable sin Qt**.
+  - **Cambios sin guardar**: marca `•` en el título y diálogo «¿guardar?» al cerrar/abrir/crear.
+  - **Recientes** (settings v2): un reciente cuyo archivo se movió **no se borra solo**; se marca «no disponible» con ícono **y** texto (doble codificación), con acción explícita para quitarlo.
+  - Los working dirs de sesiones muertas se barren al arrancar, sin tocar los de otra instancia viva.
 - **Contenedor de proyecto `.wifisurvey` (OZ-7).**
   - Guardado **atómico**: temporal, `fsync` y `rename`. En cualquier instante el archivo es la versión vieja completa o la nueva completa, nunca una mezcla. Verificado matando el proceso justo antes del renombrado.
   - Apertura defensiva de archivos que pueden venir de terceros: se rechazan rutas que escapan del destino, bombas de compresión, tamaños mentidos en el encabezado, enlaces simbólicos, nombres duplicados y manifests desproporcionados.
