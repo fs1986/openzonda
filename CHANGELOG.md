@@ -6,6 +6,13 @@ el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 ## [No publicado]
 
 ### Añadido
+- **Contenedor de proyecto `.wifisurvey` (OZ-7).**
+  - Guardado **atómico**: temporal, `fsync` y `rename`. En cualquier instante el archivo es la versión vieja completa o la nueva completa, nunca una mezcla. Verificado matando el proceso justo antes del renombrado.
+  - Apertura defensiva de archivos que pueden venir de terceros: se rechazan rutas que escapan del destino, bombas de compresión, tamaños mentidos en el encabezado, enlaces simbólicos, nombres duplicados y manifests desproporcionados.
+  - **Nada de lo que dice el archivo se cree sin comprobarlo leyendo**: el tamaño declarado nunca se usa para reservar memoria, y el límite se aplica contando los bytes que salen del descompresor, abortando a mitad.
+  - Cuatro tipos de error distintos —ajeno, de versión futura, corrupto y hostil— porque la acción del usuario es distinta en cada caso.
+  - Escritura determinista: dos guardados del mismo contenido producen bytes idénticos, para que las copias incrementales y los diffs sigan sirviendo.
+  - Hashes de cada entrada en el manifest, verificados al abrir: detectan manipulación.
 - **Persistencia SQLite (OZ-6).**
   - Runner de migraciones con numeración lineal y **una transacción por migración**: si la quinta falla, las cuatro anteriores quedan confirmadas y reabrir el proyecto reintenta solo desde donde se cortó.
   - Esquema inicial según diseño §8.2, con tablas `STRICT` — SQLite acepta por defecto texto en una columna `INTEGER`, y eso contradice el invariante de honestidad del dato.
