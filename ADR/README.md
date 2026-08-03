@@ -18,5 +18,6 @@ ADR" del diseño (§25) y son vinculantes para todos los agentes (ver `CLAUDE.md
 | [007](ADR-007-binding-ctypes.md) | Binding a `wlanapi.dll` mediante `ctypes` | Aceptado |
 | [008](ADR-008-composition-root.md) | Composition root en un paquete propio | Aceptado |
 | [009](ADR-009-piso-version-runtime.md) | Piso de versión de Windows: aserción de arranque en runtime | Propuesto |
+| [012](ADR-012-distribucion-per-user.md) | Distribución solo per-user (MSI); portable fuera de alcance | Propuesto |
 
 Para proponer una decisión nueva, copia [`template.md`](template.md).
