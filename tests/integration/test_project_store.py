@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from application.project_service import ProjectErrorKind, ProjectStoreError
+from domain.measurement import Measured, Provenance
 from domain.project import Floor, FloorPlan, Project, Site
 from persistence.container import (
     CONTAINER_FORMAT_VERSION,
@@ -34,7 +35,12 @@ def _store(tmp_path: Path, *, app_version: str = "0.0.3") -> WifiSurveyProjectSt
 
 
 def _proyecto_con_estructura() -> Project:
-    plan = FloorPlan(asset_sha256="a" * 64, width_px=1200, height_px=800, dpi=96.0)
+    plan = FloorPlan(
+        asset_sha256="a" * 64,
+        width_px=1200,
+        height_px=800,
+        dpi=Measured(96.0, Provenance.ESTIMATED),
+    )
     floor = Floor(name="Planta baja", level=0, plan=plan)
     site = Site(name="Sede central", floors=(floor,))
     return Project(name="Estudio de cobertura", sites=(site,))

@@ -15,6 +15,7 @@ import sqlite3
 from uuid import UUID, uuid4
 
 from domain.calibration import Calibration
+from domain.measurement import Measured, Provenance
 from domain.project import Floor, FloorPlan, Project, Site
 from domain.units import Meters
 
@@ -75,15 +76,16 @@ class SQLiteProjectRepository:
         cal = plan.calibration
         self._conn.execute(
             "INSERT INTO floor_plan (id, asset_sha256, width_px, height_px, dpi, "
-            "rotation_degrees, cal_meters_per_pixel, cal_pixel_distance, "
+            "dpi_provenance, rotation_degrees, cal_meters_per_pixel, cal_pixel_distance, "
             "cal_real_distance_m, cal_click_uncertainty) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 plan_id,
                 plan.asset_sha256,
                 plan.width_px,
                 plan.height_px,
-                plan.dpi,
+                plan.dpi.value,
+                plan.dpi.provenance.value,
                 plan.rotation_degrees,
                 cal.meters_per_pixel if cal else None,
                 cal.pixel_distance if cal else None,
@@ -125,7 +127,7 @@ class SQLiteProjectRepository:
             "SELECT f.id, f.name, f.level, f.height_m, "
             "       p.asset_sha256, p.width_px, p.height_px, p.dpi, p.rotation_degrees, "
             "       p.cal_meters_per_pixel, p.cal_pixel_distance, "
-            "       p.cal_real_distance_m, p.cal_click_uncertainty "
+            "       p.cal_real_distance_m, p.cal_click_uncertainty, p.dpi_provenance "
             "FROM floor f JOIN floor_plan p ON p.id = f.plan_id "
             "WHERE f.site_id = ? ORDER BY f.position",
             (site_id,),
@@ -141,7 +143,7 @@ class SQLiteProjectRepository:
                     asset_sha256=fila[4],
                     width_px=fila[5],
                     height_px=fila[6],
-                    dpi=fila[7],
+                    dpi=Measured(fila[7], Provenance(fila[13])),
                     rotation_degrees=fila[8],
                     calibration=_calibracion_desde_fila(fila[9:13]),
                 ),

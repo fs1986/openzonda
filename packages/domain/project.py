@@ -15,6 +15,7 @@ from dataclasses import dataclass, field, replace
 from uuid import UUID, uuid4
 
 from domain.calibration import Calibration
+from domain.measurement import Measured
 from domain.units import Meters
 
 PROJECT_SCHEMA_VERSION = 1
@@ -55,7 +56,10 @@ class FloorPlan:
     asset_sha256: str
     width_px: int
     height_px: int
-    dpi: float
+    dpi: Measured[float]
+    """DPI del plano con su procedencia. `OBSERVED` si vino del archivo (EXIF), `ESTIMATED`
+    si se asumió un valor por defecto. Es `Measured`, no `float`, a propósito: el número no
+    existe crudo, así que nadie puede usar un DPI asumido como si fuera medido (ADR-006)."""
     rotation_degrees: float = 0.0
     calibration: Calibration | None = None
 
@@ -70,8 +74,8 @@ class FloorPlan:
                 f"Las dimensiones del plano deben ser positivas, no "
                 f"{self.width_px}x{self.height_px}."
             )
-        if self.dpi <= 0.0:
-            raise ValueError(f"El DPI debe ser positivo, no {self.dpi}.")
+        if self.dpi.value <= 0.0:
+            raise ValueError(f"El DPI debe ser positivo, no {self.dpi.value}.")
 
     @property
     def is_calibrated(self) -> bool:
