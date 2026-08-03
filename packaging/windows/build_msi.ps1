@@ -68,6 +68,11 @@ if (-not $OutputPath) {
 
 $wxs = Join-Path $PSScriptRoot 'OpenZonda.wxs'
 $intermedios = Join-Path $PSScriptRoot 'obj'
+$icono = Join-Path (Join-Path $PSScriptRoot 'ico') 'openzonda.ico'
+
+if (-not (Test-Path -LiteralPath $icono)) {
+    throw "Falta el icono en $icono. Está versionado en el repositorio; si no aparece, la copia de trabajo está incompleta."
+}
 
 # --- Staging limpio ---------------------------------------------------------------------
 # Ejecutar el bundle (smoke test, o simplemente abrirlo) deja logs/, settings.json y —lo
@@ -109,6 +114,7 @@ Write-Host "    Salida:  $OutputPath"
     -arch x64 `
     -d "ProductVersion=$Version" `
     -d "BundleDir=$stagingApp" `
+    -d "IconFile=$icono" `
     -intermediateFolder $intermedios `
     -out $OutputPath
 

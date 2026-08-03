@@ -46,8 +46,14 @@ el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
   - `scripts/smoke_local.cmd`: lanzador de doble clic que aplica la política de ejecución, mantiene la ventana abierta al terminar —también al fallar— y propaga el código de salida.
   - La salida ahora separa el arranque real del cierre programado, en lugar de obligar a restar mentalmente.
 
+- **Identidad del ejecutable (OZ-29).**
+  - Icono en el ejecutable, en el atajo del menú Inicio y en la entrada de «Aplicaciones instaladas». **Provisional**: se reemplaza cuando exista el logotipo definitivo.
+  - Bloque `VERSIONINFO`: producto, versión, empresa, copyright Apache-2.0 y descripción, generados desde la misma versión que usa el resto del build. La cuaterna numérica cae a `0.0.0.0` cuando no hay tag reconocible, en lugar de inventar un número con pinta de release; la cadena exacta de `git describe` se conserva en `FileVersion`.
+- **Instalación documentada (OZ-26).** El README explica la advertencia de SmartScreen antes de que aparezca, qué significa realmente y cómo verificar el instalador por SHA-256 y SBOM.
+
 ### Cambiado
-- Toolchain del instalador: WiX v4 → **v5**. El elemento `<Files>`, que cosecha el árbol del bundle automáticamente, solo existe desde v5; en v4 habría que enumerar a mano las dependencias de Qt, una lista que se desincroniza en silencio al cambiar de versión.
+- Toolchain del instalador: WiX v4 → **v5**.
+- **Decisión: v0.x se distribuye sin firmar** (OZ-26). No se adquiere certificado de firma de código para la alpha; se revisita Azure Trusted Signing cuando haya usuarios reales. El elemento `<Files>`, que cosecha el árbol del bundle automáticamente, solo existe desde v5; en v4 habría que enumerar a mano las dependencias de Qt, una lista que se desincroniza en silencio al cambiar de versión.
 - Rutas de aplicación y códigos de error adoptan el nombre definitivo del producto: `%APPDATA%\OpenZonda\`, prefijo `OZD-` para errores (no `OZ-`, que colisiona con las claves de tarjeta) y CLI de fixtures `oz-capture`. El renombrado nunca se había propagado al diseño §18 y §19.
 
 ### Corregido
