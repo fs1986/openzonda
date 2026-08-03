@@ -21,5 +21,6 @@ ADR" del diseño (§25) y son vinculantes para todos los agentes (ver `CLAUDE.md
 | [010](ADR-010-modelo-documento.md) | Proyecto como documento (extraer / re-empaquetar) | Propuesto |
 | [011](ADR-011-shell-unica.md) | Shell única con vista central reemplazable | Propuesto |
 | [012](ADR-012-distribucion-per-user.md) | Distribución solo per-user (MSI); portable fuera de alcance | Propuesto |
+| [013](ADR-013-i18n.md) | Internacionalización: español e inglés con QTranslator | Propuesto |
 
 Para proponer una decisión nueva, copia [`template.md`](template.md).
