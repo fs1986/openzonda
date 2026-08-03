@@ -1,18 +1,22 @@
-"""Ciclo de vida del proyecto como documento (caso de uso F1.4, OZ-8).
+"""Ciclo de vida del proyecto como documento (caso de uso F1.4/OZ-8; worker en OZ-34).
 
 Modelo **documento** (ADR-010): el `.wifisurvey` es el archivo del usuario. Abrir lo extrae
 a un working dir de trabajo; guardar re-empaqueta atómicamente sobre el destino. Este módulo
 es la lógica pura del ciclo de vida —nuevo/abrir/guardar/cerrar, estado *dirty*, recientes—
 sin Qt ni infraestructura: se prueba headless (`tests/unit/test_project_service.py`).
 
-## Preparado para mover el I/O a un worker sin rediseño (deuda OZ-34)
+## I/O fuera del hilo de la UI (OZ-34)
 
-Hoy el I/O de archivo corre en el hilo que llama. Cuando entre plano/captura (payloads
-grandes) habrá que moverlo a un worker con cancelación. Para que ese cambio **no** obligue a
-rediseñar ni el servicio ni los ViewModels, las operaciones (`new_project`, `open_project`,
-`save`, …) **no devuelven el documento**: devuelven `None` y el resultado se comunica a los
-listeners (`on_state` / `on_error`). Meter el worker solo cambia *cuándo* se emite la
-notificación, no la firma que la UI consume. Ningún llamante asume sincronía en el retorno.
+Abrir y guardar hacen I/O que puede tardar (extraer/empaquetar el contenedor con un plano
+embebido). Se ejecutan a través de un `TaskExecutor` inyectado: inline en tests
+(`SyncTaskExecutor`), en un worker de Qt en la app. Las operaciones **no devuelven el
+documento**: el resultado se comunica por listener (`on_state` / `on_error`), así que mover
+el I/O a un worker no cambió ninguna firma que la UI consuma.
+
+**Cancelación (lógica, no aborta el I/O):** cada operación async lleva una *generación*. Si
+el usuario cierra o cambia de proyecto mientras una corre, la generación avanza y el
+resultado que llega tarde se **descarta** (y se limpia el working dir que hubiera abierto).
+No se aborta el I/O a mitad —eso obligaría a re-tocar el contenedor endurecido de OZ-7—.
 """
 
 from __future__ import annotations
@@ -21,9 +25,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 from application.settings import SettingsRepository
+from application.task_executor import SyncTaskExecutor, TaskExecutor
 from domain.project import Project
 
 DEFAULT_PROJECT_NAME = "Proyecto sin título"
@@ -65,8 +70,7 @@ class ProjectStore(Protocol):
     """Port de persistencia del documento de proyecto. Su adaptador (`persistence`) usa el
     contenedor `.wifisurvey` y SQLite; el caso de uso solo ve dominio y rutas.
 
-    Síncrono a propósito: cuando el I/O se mueva a un worker, el worker envolverá estas
-    llamadas sin cambiar su firma (ver docstring del módulo).
+    Síncrono a propósito: el worker (OZ-34) envuelve estas llamadas sin cambiar su firma.
     """
 
     def create_empty(self) -> ProjectWorkspace:
@@ -115,6 +119,8 @@ class ProjectState:
     path: Path | None
     dirty: bool
     recent: tuple[RecentEntry, ...] = ()
+    busy: bool = False
+    """Hay una operación de I/O (abrir/guardar) en curso: la UI deshabilita acciones."""
 
 
 class ProjectServiceListener(Protocol):
@@ -144,13 +150,19 @@ class ProjectService:
         store: ProjectStore,
         settings_repository: SettingsRepository,
         *,
+        executor: TaskExecutor | None = None,
         default_name: str = DEFAULT_PROJECT_NAME,
     ) -> None:
         self._store = store
         self._settings = settings_repository
+        self._executor = executor or SyncTaskExecutor()
         self._default_name = default_name
         self._current: _OpenProject | None = None
         self._listeners: list[ProjectServiceListener] = []
+        # Cancelación lógica: cada op async lleva una generación; si avanza, su resultado
+        # tardío se descarta. `_pending` es la generación de la op vigente (o None).
+        self._generation = 0
+        self._pending: int | None = None
 
     # ----------------------------------------------------------------- observabilidad
 
@@ -166,6 +178,10 @@ class ProjectService:
     def has_project(self) -> bool:
         return self._current is not None
 
+    @property
+    def is_busy(self) -> bool:
+        return self._pending is not None
+
     def state(self) -> ProjectState:
         actual = self._current
         return ProjectState(
@@ -174,12 +190,16 @@ class ProjectService:
             path=actual.path if actual else None,
             dirty=actual.dirty if actual else False,
             recent=self._recent_entries(),
+            busy=self._pending is not None,
         )
 
     # ------------------------------------------------------------------- operaciones
 
     def new_project(self) -> None:
-        """Crea un proyecto vacío en un working dir nuevo. Queda *dirty* (sin guardar)."""
+        """Crea un proyecto vacío en un working dir nuevo. Queda *dirty* (sin guardar).
+
+        Es rápido (base vacía), así que corre inline; cancela cualquier op async pendiente."""
+        self._cancel_pending()
         self._discard_current()
         workspace = self._store.create_empty()
         proyecto = Project(name=self._default_name)
@@ -187,25 +207,29 @@ class ProjectService:
         self._emit_state()
 
     def open_project(self, source: Path) -> None:
-        """Abre un `.wifisurvey`. En caso de fallo emite `on_error`, no relanza."""
+        """Abre un `.wifisurvey` en el worker. En caso de fallo emite `on_error`."""
         source = Path(source)
         if not source.exists():
             self._emit_error(
-                ProjectStoreError(
-                    ProjectErrorKind.NOT_FOUND,
-                    f"El archivo ya no existe:\n{source}",
-                )
+                ProjectStoreError(ProjectErrorKind.NOT_FOUND, f"El archivo ya no existe:\n{source}")
             )
             return
-        try:
-            workspace, proyecto = self._store.open(source)
-        except ProjectStoreError as error:
-            self._emit_error(error)
-            return
-        self._discard_current()
-        self._current = _OpenProject(proyecto, workspace, path=source, dirty=False)
-        self._push_recent(source)
-        self._emit_state()
+        gen = self._start_async()
+
+        def trabajo() -> object:
+            return self._store.open(source)
+
+        def hecho(resultado: object) -> None:
+            workspace, proyecto = cast(tuple[ProjectWorkspace, Project], resultado)
+            if self._is_stale(gen):
+                self._store.discard(workspace)  # op obsoleta: no filtrar el working dir
+                return
+            self._discard_current()
+            self._current = _OpenProject(proyecto, workspace, path=source, dirty=False)
+            self._push_recent(source)
+            self._finish_async(gen)
+
+        self._executor.submit(trabajo, hecho, lambda e: self._async_error(gen, e))
 
     def save(self) -> None:
         """Guarda sobre la ruta actual. Requiere que ya haya una (si no, `save_as`)."""
@@ -220,7 +244,8 @@ class ProjectService:
         self._save_to(Path(destination))
 
     def close_project(self) -> None:
-        """Cierra el documento y libera su working dir."""
+        """Cierra el documento y libera su working dir. Cancela una op pendiente."""
+        self._cancel_pending()
         self._discard_current()
         self._emit_state()
 
@@ -235,15 +260,23 @@ class ProjectService:
 
     def _save_to(self, destination: Path) -> None:
         actual = self._require_open()
-        try:
-            self._store.save(actual.workspace, actual.project, destination)
-        except ProjectStoreError as error:
-            self._emit_error(error)
-            return
-        actual.path = destination
-        actual.dirty = False
-        self._push_recent(destination)
-        self._emit_state()
+        workspace = actual.workspace
+        project = actual.project
+        gen = self._start_async()
+
+        def trabajo() -> object:
+            self._store.save(workspace, project, destination)
+            return None
+
+        def hecho(_resultado: object) -> None:
+            if self._is_stale(gen) or self._current is None:
+                return  # op obsoleta o proyecto cerrado mientras guardaba
+            self._current.path = destination
+            self._current.dirty = False
+            self._push_recent(destination)
+            self._finish_async(gen)
+
+        self._executor.submit(trabajo, hecho, lambda e: self._async_error(gen, e))
 
     def _require_open(self) -> _OpenProject:
         if self._current is None:
@@ -254,6 +287,38 @@ class ProjectService:
         if self._current is not None:
             self._store.discard(self._current.workspace)
             self._current = None
+
+    # --------------------------------------------------------------- async / generación
+
+    def _start_async(self) -> int:
+        """Marca el inicio de una op async: nueva generación, estado ocupado, notifica."""
+        self._generation += 1
+        self._pending = self._generation
+        self._emit_state()
+        return self._generation
+
+    def _finish_async(self, gen: int) -> None:
+        if self._pending == gen:
+            self._pending = None
+        self._emit_state()
+
+    def _cancel_pending(self) -> None:
+        """Invalida la op pendiente (su resultado tardío se descartará) y libera 'ocupado'."""
+        self._generation += 1
+        self._pending = None
+
+    def _is_stale(self, gen: int) -> bool:
+        return gen != self._generation
+
+    def _async_error(self, gen: int, error: Exception) -> None:
+        if self._is_stale(gen):
+            return
+        self._pending = None
+        if isinstance(error, ProjectStoreError):
+            self._emit_error(error)
+        else:
+            self._emit_error(ProjectStoreError(ProjectErrorKind.IO, str(error)))
+        self._emit_state()
 
     # -------------------------------------------------------------------- recientes
 
