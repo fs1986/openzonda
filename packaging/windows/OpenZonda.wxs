@@ -40,11 +40,9 @@
     <!--
       Preflight (diseño §18).
 
-      Esto NO contradice ADR-001 ("toda API se comprueba por disponibilidad en runtime,
-      nunca por número de versión"): aquello se refiere a detectar capacidades del stack
-      WLAN dentro de la aplicación. Aquí se trata de impedir la instalación en un SO fuera
-      del baseline soportado, que es precisamente donde un número de versión es el
-      criterio correcto y el único disponible antes de que exista aplicación alguna.
+      Solo queda la comprobación de arquitectura x64. `VersionNT64` está definida (truthy)
+      en todo Windows de 64 bits; no depende del número de versión, así que no le afecta el
+      problema descrito abajo.
 
       El espacio en disco no se comprueba aquí a propósito: Windows Installer lo calcula
       durante CostFinalize y aborta con un mensaje claro y localizado. Duplicar esa lógica
@@ -54,9 +52,25 @@
     <Launch
         Condition="VersionNT64"
         Message="OpenZonda requiere Windows de 64 bits (x64)." />
-    <Launch
-        Condition="Installed OR (WindowsBuild &gt;= 19045)"
-        Message="OpenZonda requiere Windows 10 22H2 (build 19045) o superior. Consulta ADR-001." />
+
+    <!--
+      El piso de versión (build 19045, ADR-001) YA NO se comprueba aquí. Antes había una
+      LaunchCondition `Installed OR (WindowsBuild >= 19045)` y estaba rota (OZ-33): en
+      Windows 10/11 la propiedad `WindowsBuild` queda congelada en 9600 (valor de Win 8.1)
+      porque `msiexec.exe` no declara Windows 10 en su manifiesto y MSI deriva esa propiedad
+      del `GetVersionEx` compatibilizado. `9600 >= 19045` es falso, así que la condición
+      rechazaba TODA instalación limpia en Windows moderno, build 26200 incluido.
+
+      Leer el build real exigiría el registro (`CurrentBuildNumber`), pero una LaunchCondition
+      no puede usarlo de forma fiable: la acción `LaunchConditions` se secuencia ANTES que
+      `AppSearch`, así que la propiedad de una RegistrySearch aún no está poblada cuando la
+      condición se evalúa. Sortearlo pide re-secuenciar o una custom action nativa: más
+      superficie frágil para replicar algo que el ejecutable ya hace bien.
+
+      Por eso el piso de versión se aplica en runtime, al arrancar, leyendo la versión por
+      una vía que no miente (`openzonda.baseline`, registro + RtlGetVersion). Encaje con
+      ADR-001 y motivación completa en ADR-009.
+    -->
 
     <Property Id="ARPURLINFOABOUT" Value="https://github.com/openzonda/openzonda" />
     <Property Id="ARPHELPLINK" Value="https://github.com/openzonda/openzonda/issues" />
