@@ -7,6 +7,7 @@ se serializa un `.wifisurvey` —eso lo cubre el test del adapter de `persistenc
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ from application.project_service import (
     ProjectWorkspace,
 )
 from application.settings import AppSettings
+from domain.measurement import Provenance
 from domain.project import Project
 
 
@@ -44,6 +46,7 @@ class FakeProjectStore:
         self.saved: dict[Path, Project] = {}
         self.discarded: list[ProjectWorkspace] = []
         self.orphans_cleaned = 0
+        self.assets: dict[str, bytes] = {}
 
     def create_empty(self) -> ProjectWorkspace:
         self._n += 1
@@ -65,6 +68,16 @@ class FakeProjectStore:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(b"fake-wifisurvey")
         self.saved[destination] = project
+
+    def store_asset(self, workspace: ProjectWorkspace, data: bytes, extension: str) -> str:
+        sha = hashlib.sha256(data).hexdigest()
+        self.assets[sha] = data
+        return sha
+
+    def read_asset(self, workspace: ProjectWorkspace, sha256: str) -> bytes:
+        if sha256 not in self.assets:
+            raise ProjectStoreError(ProjectErrorKind.CORRUPT, f"asset ausente: {sha256}")
+        return self.assets[sha256]
 
     def discard(self, workspace: ProjectWorkspace) -> None:
         self.discarded.append(workspace)
@@ -273,6 +286,150 @@ def test_remove_recent_es_explicito(entorno, tmp_path: Path) -> None:
 
     service.remove_recent(ruta)
     assert service.state().recent == ()
+
+
+# -------------------------------------------------------- edición del árbol Site→Floor (OZ-9a)
+
+
+def _png_valido(marca: bytes = b"x", *, width: int = 100, height: int = 80) -> bytes:
+    """PNG mínimo válido sin pHYs (DPI se asume 96, ESTIMATED). `marca` varía el contenido."""
+    import struct
+    import zlib
+
+    def chunk(tipo: bytes, datos: bytes) -> bytes:
+        crc = zlib.crc32(tipo + datos) & 0xFFFFFFFF
+        return struct.pack(">I", len(datos)) + tipo + datos + struct.pack(">I", crc)
+
+    sig = b"\x89PNG\r\n\x1a\n"
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return sig + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(marca)) + chunk(b"IEND", b"")
+
+
+def _proyecto_abierto(entorno) -> ProjectService:
+    service, _store, _listener = entorno
+    service.new_project()
+    return service
+
+
+def test_add_site_agrega_y_marca_dirty(entorno) -> None:
+    service = _proyecto_abierto(entorno)
+    service.add_site("Sede central")
+
+    sitios = service.state().project.sites
+    assert [s.name for s in sitios] == ["Sede central"]
+    assert service.is_dirty is True
+
+
+def test_add_site_nombre_duplicado_emite_error_sin_cambiar(entorno) -> None:
+    service, _store, listener = entorno
+    service.new_project()
+    service.add_site("Sede")
+    service.add_site("Sede")  # duplicado
+
+    assert listener.errors[-1].kind is ProjectErrorKind.INVALID_EDIT
+    assert len(service.state().project.sites) == 1
+
+
+def test_rename_y_remove_site(entorno) -> None:
+    service = _proyecto_abierto(entorno)
+    service.add_site("Vieja")
+    sid = service.state().project.sites[0].id
+
+    service.rename_site(sid, "Nueva")
+    assert service.state().project.sites[0].name == "Nueva"
+
+    service.remove_site(sid)
+    assert service.state().project.sites == ()
+
+
+def test_add_floor_carga_el_plano_con_dpi_honesto(entorno, tmp_path: Path) -> None:
+    service, store, _listener = entorno
+    service.new_project()
+    service.add_site("Sede")
+    sid = service.state().project.sites[0].id
+    plano = tmp_path / "planta.png"
+    datos = _png_valido(b"planta baja")
+    plano.write_bytes(datos)
+
+    service.add_floor(sid, "Planta baja", 0, plano)
+
+    floors = service.state().project.sites[0].floors
+    assert len(floors) == 1
+    plan = floors[0].plan
+    assert plan.width_px == 100 and plan.height_px == 80
+    assert plan.dpi.provenance is Provenance.ESTIMATED  # PNG sin pHYs -> DPI asumido
+    # El asset se almacenó content-addressed por el hash de su contenido.
+    import hashlib
+
+    assert plan.asset_sha256 == hashlib.sha256(datos).hexdigest()
+    assert store.assets[plan.asset_sha256] == datos
+    assert service.is_dirty is True
+
+
+def test_add_floor_con_imagen_invalida_emite_invalid_plan(entorno, tmp_path: Path) -> None:
+    service, _store, listener = entorno
+    service.new_project()
+    service.add_site("Sede")
+    sid = service.state().project.sites[0].id
+    no_imagen = tmp_path / "renombrado.png"
+    no_imagen.write_bytes(b"esto no es una imagen")
+
+    service.add_floor(sid, "Planta baja", 0, no_imagen)
+
+    assert listener.errors[-1].kind is ProjectErrorKind.INVALID_PLAN
+    assert service.state().project.sites[0].floors == ()  # no se creó la planta
+
+
+def test_add_floor_nivel_duplicado_emite_error(entorno, tmp_path: Path) -> None:
+    service, _store, listener = entorno
+    service.new_project()
+    service.add_site("Sede")
+    sid = service.state().project.sites[0].id
+    plano = tmp_path / "p.png"
+    plano.write_bytes(_png_valido())
+
+    service.add_floor(sid, "Baja", 0, plano)
+    service.add_floor(sid, "Otra", 0, plano)  # mismo nivel
+
+    assert listener.errors[-1].kind is ProjectErrorKind.INVALID_EDIT
+    assert len(service.state().project.sites[0].floors) == 1
+
+
+def test_set_floor_plan_reemplaza_el_plano(entorno, tmp_path: Path) -> None:
+    service, _store, _listener = entorno
+    service.new_project()
+    service.add_site("Sede")
+    sid = service.state().project.sites[0].id
+    p1 = tmp_path / "p1.png"
+    p1.write_bytes(_png_valido(b"primero"))
+    service.add_floor(sid, "Baja", 0, p1)
+    fid = service.state().project.sites[0].floors[0].id
+    sha_original = service.state().project.sites[0].floors[0].plan.asset_sha256
+
+    p2 = tmp_path / "p2.png"
+    p2.write_bytes(_png_valido(b"segundo-distinto", width=200, height=150))
+    service.set_floor_plan(fid, p2)
+
+    plan = service.state().project.sites[0].floors[0].plan
+    assert plan.asset_sha256 != sha_original
+    assert (plan.width_px, plan.height_px) == (200, 150)
+
+
+def test_rename_y_remove_floor(entorno, tmp_path: Path) -> None:
+    service, _store, _listener = entorno
+    service.new_project()
+    service.add_site("Sede")
+    sid = service.state().project.sites[0].id
+    plano = tmp_path / "p.png"
+    plano.write_bytes(_png_valido())
+    service.add_floor(sid, "Baja", 0, plano)
+    fid = service.state().project.sites[0].floors[0].id
+
+    service.rename_floor(fid, "Planta técnica")
+    assert service.state().project.sites[0].floors[0].name == "Planta técnica"
+
+    service.remove_floor(fid)
+    assert service.state().project.sites[0].floors == ()
 
 
 # ---------------------------------------------------------- worker / cancelación (OZ-34)

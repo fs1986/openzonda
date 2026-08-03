@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from domain.measurement import Measured, Provenance
 from domain.project import Floor, FloorPlan, Project, Site
 from domain.units import Meters
 
@@ -20,7 +21,7 @@ def plano() -> FloorPlan:
         asset_sha256="a" * 64,
         width_px=1920,
         height_px=1080,
-        dpi=96.0,
+        dpi=Measured(96.0, Provenance.ESTIMATED),
     )
 
 
@@ -83,15 +84,46 @@ class TestFloorPlan:
 
     def test_rechaza_un_hash_que_no_es_sha256(self) -> None:
         with pytest.raises(ValueError, match=r"sha256|hash"):
-            FloorPlan(asset_sha256="corto", width_px=100, height_px=100, dpi=96.0)
+            FloorPlan(
+                asset_sha256="corto",
+                width_px=100,
+                height_px=100,
+                dpi=Measured(96.0, Provenance.ESTIMATED),
+            )
 
     def test_rechaza_dimensiones_no_positivas(self) -> None:
         with pytest.raises(ValueError, match="positiv"):
-            FloorPlan(asset_sha256="a" * 64, width_px=0, height_px=100, dpi=96.0)
+            FloorPlan(
+                asset_sha256="a" * 64,
+                width_px=0,
+                height_px=100,
+                dpi=Measured(96.0, Provenance.ESTIMATED),
+            )
 
     def test_sin_calibracion_no_hay_escala(self) -> None:
         """Un plano recién cargado no sabe cuánto mide nada: es un estado legítimo."""
         assert plano().calibration is None
+
+    def test_el_dpi_lleva_su_procedencia_inseparable(self) -> None:
+        """ADR-006: el DPI es `Measured`, no `float`. El número no existe crudo, así que un
+        DPI asumido no puede leerse ni usarse como si fuera medido — el tipo lo impide."""
+        asumido = FloorPlan(
+            asset_sha256="a" * 64,
+            width_px=100,
+            height_px=100,
+            dpi=Measured(96.0, Provenance.ESTIMATED),
+        )
+        observado = FloorPlan(
+            asset_sha256="a" * 64,
+            width_px=100,
+            height_px=100,
+            dpi=Measured(300.0, Provenance.OBSERVED),
+        )
+
+        assert asumido.dpi.value == 96.0
+        assert asumido.dpi.provenance is Provenance.ESTIMATED
+        assert asumido.dpi.is_observed() is False
+        assert observado.dpi.is_observed() is True
 
 
 class TestSite:

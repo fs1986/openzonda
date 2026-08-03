@@ -15,6 +15,7 @@ from uuid import uuid4
 import pytest
 
 from domain.calibration import Calibration
+from domain.measurement import Measured, Provenance
 from domain.project import Floor, FloorPlan, Project, Site
 from domain.units import Meters, Pixels
 from persistence.database import open_database
@@ -39,7 +40,7 @@ def plano(calibrado: bool = False) -> FloorPlan:
         asset_sha256="b" * 64,
         width_px=1920,
         height_px=1080,
-        dpi=96.0,
+        dpi=Measured(96.0, Provenance.ESTIMATED),
         rotation_degrees=1.5,
         calibration=calibracion,
     )
@@ -103,6 +104,28 @@ class TestRoundTrip:
 
         assert recuperado is not None
         assert recuperado.sites[0].floors[0].plan.calibration is None
+
+    def test_la_procedencia_del_dpi_sobrevive(self, repositorio: SQLiteProjectRepository) -> None:
+        """Un DPI observado (del EXIF) no debe volver como asumido: el repo persiste la
+        procedencia, no se apoya en el default 'estimated' de la columna (ADR-006)."""
+        plan_observado = FloorPlan(
+            asset_sha256="c" * 64,
+            width_px=800,
+            height_px=600,
+            dpi=Measured(300.0, Provenance.OBSERVED),
+        )
+        original = Project(
+            name="Con DPI del archivo",
+            sites=(Site(name="Sede", floors=(Floor(name="Baja", level=0, plan=plan_observado),)),),
+        )
+        repositorio.save(original)
+
+        recuperado = repositorio.load(original.id)
+
+        assert recuperado is not None
+        dpi = recuperado.sites[0].floors[0].plan.dpi
+        assert dpi.value == 300.0
+        assert dpi.provenance is Provenance.OBSERVED  # no degradado a ESTIMATED
 
     def test_el_orden_de_plantas_y_sitios_se_conserva(
         self, repositorio: SQLiteProjectRepository

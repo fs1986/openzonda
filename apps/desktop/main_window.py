@@ -11,13 +11,17 @@ comunica solo por color —un reciente roto se marca con ícono **y** texto—.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
+from uuid import UUID
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QDockWidget,
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -27,17 +31,22 @@ from PySide6.QtWidgets import (
     QPushButton,
     QStackedWidget,
     QStyle,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from application.project_service import ProjectService, ProjectState
 from application.settings import SettingsRepository
+from desktop.floorplan_viewmodel import FloorPlanViewModel, NewFloor, plan_summary
 from desktop.shell_viewmodel import DiscardChoice, ShellViewModel
 
 DEFAULT_SIZE = (1024, 700)
 PROJECT_FILTER = "Proyectos OpenZonda (*.wifisurvey)"
 PROJECT_SUFFIX = ".wifisurvey"
+IMAGE_FILTER = "Imágenes de plano (*.png *.jpg *.jpeg)"
+_NODE_ROLE = Qt.ItemDataRole.UserRole
 
 
 class MainWindow(QMainWindow):
@@ -60,6 +69,15 @@ class MainWindow(QMainWindow):
             show_error=self._mostrar_error,
         )
 
+        self._tree_vm = FloorPlanViewModel(
+            project_service,
+            ask_site_name=self._pedir_nombre_sitio,
+            ask_new_floor=self._pedir_nueva_planta,
+            ask_rename=self._pedir_renombre,
+            ask_image_path=self._pedir_imagen,
+            confirm_remove=self._confirmar_eliminacion,
+        )
+
         self._inicio = _InicioView(
             on_new=self._vm.request_new,
             on_open=lambda: self._vm.request_open(None),
@@ -71,6 +89,18 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._inicio)
         self._stack.addWidget(self._proyecto)
         self.setCentralWidget(self._stack)
+
+        self._arbol = _ArbolView(
+            on_add_site=self._tree_vm.request_add_site,
+            on_add_floor=self._tree_vm.request_add_floor,
+            on_rename=self._al_renombrar_nodo,
+            on_remove=self._al_eliminar_nodo,
+            on_load_plan=self._tree_vm.request_load_plan,
+        )
+        self._dock_arbol = QDockWidget("Sitios y plantas", self)
+        self._dock_arbol.setObjectName("dockArbol")
+        self._dock_arbol.setWidget(self._arbol)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._dock_arbol)
 
         self._construir_acciones()
         self._vm.set_on_changed(self._al_cambiar_estado)
@@ -138,8 +168,13 @@ class MainWindow(QMainWindow):
         if state.has_project:
             self._stack.setCurrentWidget(self._proyecto)
             self._proyecto.mostrar(state)
+            self._dock_arbol.setVisible(True)
+            self._arbol.setEnabled(not ocupado)
+            if state.project is not None:
+                self._arbol.mostrar(state.project)
         else:
             self._stack.setCurrentWidget(self._inicio)
+            self._dock_arbol.setVisible(False)
 
         if ocupado:
             self.statusBar().showMessage("Trabajando…")
@@ -203,6 +238,56 @@ class MainWindow(QMainWindow):
 
     def _mostrar_error(self, titulo: str, mensaje: str) -> None:
         QMessageBox.critical(self, titulo, mensaje)
+
+    # ----------------------------------------------- interacciones del árbol (OZ-9a)
+
+    def _pedir_nombre_sitio(self) -> str | None:
+        nombre, ok = QInputDialog.getText(self, "Nuevo sitio", "Nombre del sitio:")
+        return nombre if ok and nombre.strip() else None
+
+    def _pedir_renombre(self, actual: str) -> str | None:
+        nombre, ok = QInputDialog.getText(self, "Renombrar", "Nuevo nombre:", text=actual)
+        return nombre if ok and nombre.strip() else None
+
+    def _pedir_imagen(self) -> Path | None:
+        nombre, _ = QFileDialog.getOpenFileName(self, "Elegir plano", "", IMAGE_FILTER)
+        return Path(nombre) if nombre else None
+
+    def _pedir_nueva_planta(self) -> NewFloor | None:
+        """Recoge nombre, nivel e imagen de una planta nueva. Cancelar en cualquier paso
+        aborta: el plano es obligatorio, así que no se crea una planta a medias (OZ-9a)."""
+        nombre, ok = QInputDialog.getText(self, "Nueva planta", "Nombre de la planta:")
+        if not ok or not nombre.strip():
+            return None
+        nivel, ok = QInputDialog.getInt(self, "Nueva planta", "Nivel (0 = planta baja):", 0)
+        if not ok:
+            return None
+        imagen = self._pedir_imagen()
+        if imagen is None:
+            return None
+        return NewFloor(name=nombre.strip(), level=nivel, image=imagen)
+
+    def _confirmar_eliminacion(self, descripcion: str) -> bool:
+        respuesta = QMessageBox.question(
+            self,
+            "Eliminar",
+            f"¿Eliminar {descripcion}? Esta acción no se puede deshacer.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return respuesta == QMessageBox.StandardButton.Yes
+
+    def _al_renombrar_nodo(self, kind: str, node_id: UUID, current: str) -> None:
+        if kind == "site":
+            self._tree_vm.request_rename_site(node_id, current)
+        else:
+            self._tree_vm.request_rename_floor(node_id, current)
+
+    def _al_eliminar_nodo(self, kind: str, node_id: UUID, description: str) -> None:
+        if kind == "site":
+            self._tree_vm.request_remove_site(node_id, description)
+        else:
+            self._tree_vm.request_remove_floor(node_id, description)
 
     # ---------------------------------------------------------------------- geometría
 
@@ -293,8 +378,8 @@ class _InicioView(QWidget):
 
 
 class _ProyectoView(QWidget):
-    """Vista del proyecto abierto. En OZ-8 muestra identidad y nombre editable; el árbol de
-    sitios/plantas y el plano llegan en tarjetas siguientes."""
+    """Vista central del proyecto abierto: identidad y nombre editable. El árbol Site→Floor y
+    el resumen del plano viven en el dock lateral (`_ArbolView`, OZ-9a)."""
 
     def __init__(self, *, on_rename) -> None:
         super().__init__()
@@ -319,3 +404,170 @@ class _ProyectoView(QWidget):
 
     def _emitir_rename(self) -> None:
         self._on_rename(self._nombre.text())
+
+
+class _ArbolView(QWidget):
+    """Dock del árbol Site→Floor + resumen textual del plano de la planta seleccionada.
+
+    OZ-9a NO renderiza el plano (eso es el visor de OZ-36): muestra el árbol y, para la planta
+    elegida, un resumen con dimensiones y DPI acompañado de su procedencia en texto —"del
+    archivo" vs. "asumido"—. Ese resumen es lo que hace validable la honestidad del plano sin
+    depender del visor, y cumple el doble canal de accesibilidad (nunca solo color).
+    """
+
+    def __init__(self, *, on_add_site, on_add_floor, on_rename, on_remove, on_load_plan) -> None:
+        super().__init__()
+        self._on_add_site = on_add_site
+        self._on_add_floor = on_add_floor
+        self._on_rename = on_rename
+        self._on_remove = on_remove
+        self._on_load_plan = on_load_plan
+
+        layout = QVBoxLayout(self)
+        self._tree = QTreeWidget()
+        self._tree.setHeaderHidden(True)
+        self._tree.setColumnCount(1)
+        self._tree.currentItemChanged.connect(lambda *_: self._al_cambiar_seleccion())
+        layout.addWidget(self._tree, 1)
+
+        botones = QHBoxLayout()
+        self._btn_sitio = QPushButton("+ Sitio")
+        self._btn_sitio.clicked.connect(lambda: self._on_add_site())
+        self._btn_planta = QPushButton("+ Planta")
+        self._btn_planta.clicked.connect(self._agregar_planta)
+        self._btn_plano = QPushButton("Cargar plano…")
+        self._btn_plano.clicked.connect(self._cargar_plano)
+        self._btn_renombrar = QPushButton("Renombrar…")
+        self._btn_renombrar.clicked.connect(self._renombrar)
+        self._btn_eliminar = QPushButton("Eliminar")
+        self._btn_eliminar.clicked.connect(self._eliminar)
+        for b in (
+            self._btn_sitio,
+            self._btn_planta,
+            self._btn_plano,
+            self._btn_renombrar,
+            self._btn_eliminar,
+        ):
+            botones.addWidget(b)
+        layout.addLayout(botones)
+
+        self._resumen = QLabel("Seleccioná una planta para ver su plano.")
+        self._resumen.setWordWrap(True)
+        self._resumen.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self._resumen)
+
+        self._actualizar_botones()
+
+    # -------------------------------------------------------------------- pintado
+
+    def mostrar(self, project) -> None:
+        seleccion = self._id_seleccionado()
+        self._tree.blockSignals(True)
+        self._tree.clear()
+        for site in project.sites:
+            s_item = QTreeWidgetItem([site.name])
+            s_item.setData(0, _NODE_ROLE, {"kind": "site", "id": str(site.id)})
+            for floor in site.floors:
+                f_item = QTreeWidgetItem([f"{floor.name}  ·  nivel {floor.level}"])
+                f_item.setData(
+                    0,
+                    _NODE_ROLE,
+                    {
+                        "kind": "floor",
+                        "id": str(floor.id),
+                        "name": floor.name,
+                        "summary": plan_summary(floor.plan),
+                    },
+                )
+                s_item.addChild(f_item)
+            self._tree.addTopLevelItem(s_item)
+        self._tree.expandAll()
+        self._tree.blockSignals(False)
+        self._reseleccionar(seleccion)
+        self._al_cambiar_seleccion()
+
+    # ------------------------------------------------------------------- acciones
+
+    def _agregar_planta(self) -> None:
+        datos = self._nodo_actual()
+        if datos is None:
+            return
+        # Agregar planta cuelga del sitio: si hay una planta seleccionada, se usa su sitio padre.
+        site_id = datos["id"] if datos["kind"] == "site" else self._site_padre()
+        if site_id is not None:
+            self._on_add_floor(UUID(site_id))
+
+    def _cargar_plano(self) -> None:
+        datos = self._nodo_actual()
+        if datos is not None and datos["kind"] == "floor":
+            self._on_load_plan(UUID(datos["id"]))
+
+    def _renombrar(self) -> None:
+        datos = self._nodo_actual()
+        if datos is None:
+            return
+        actual = self._tree.currentItem().text(0) if datos["kind"] == "site" else datos["name"]
+        self._on_rename(datos["kind"], UUID(datos["id"]), actual)
+
+    def _eliminar(self) -> None:
+        datos = self._nodo_actual()
+        if datos is None:
+            return
+        que = "el sitio" if datos["kind"] == "site" else "la planta"
+        self._on_remove(datos["kind"], UUID(datos["id"]), que)
+
+    # -------------------------------------------------------------------- internos
+
+    def _al_cambiar_seleccion(self) -> None:
+        datos = self._nodo_actual()
+        if datos is not None and datos["kind"] == "floor":
+            self._resumen.setText(f"Plano: {datos['summary']}")
+        else:
+            self._resumen.setText("Seleccioná una planta para ver su plano.")
+        self._actualizar_botones()
+
+    def _actualizar_botones(self) -> None:
+        datos = self._nodo_actual()
+        hay = datos is not None
+        es_planta = hay and datos["kind"] == "floor"
+        # Agregar planta requiere un sitio (directo o el padre de la planta seleccionada).
+        self._btn_planta.setEnabled(hay)
+        self._btn_plano.setEnabled(es_planta)
+        self._btn_renombrar.setEnabled(hay)
+        self._btn_eliminar.setEnabled(hay)
+
+    def _nodo_actual(self) -> dict | None:
+        item = self._tree.currentItem()
+        return item.data(0, _NODE_ROLE) if item is not None else None
+
+    def _site_padre(self) -> str | None:
+        item = self._tree.currentItem()
+        padre = item.parent() if item is not None else None
+        if padre is None:
+            return None
+        datos = padre.data(0, _NODE_ROLE)
+        return datos["id"] if datos else None
+
+    def _id_seleccionado(self) -> str | None:
+        datos = self._nodo_actual()
+        return datos["id"] if datos else None
+
+    def _reseleccionar(self, node_id: str | None) -> None:
+        if node_id is None:
+            return
+        for item in self._recorrer():
+            datos = item.data(0, _NODE_ROLE)
+            if datos and datos["id"] == node_id:
+                self._tree.setCurrentItem(item)
+                return
+
+    def _recorrer(self) -> Iterator[QTreeWidgetItem]:
+        for i in range(self._tree.topLevelItemCount()):
+            site = self._tree.topLevelItem(i)
+            if site is None:  # pragma: no cover - el rango garantiza no-nulo
+                continue
+            yield site
+            for j in range(site.childCount()):
+                hijo = site.child(j)
+                if hijo is not None:  # pragma: no cover
+                    yield hijo

@@ -6,6 +6,12 @@ el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 ## [No publicado]
 
 ### Añadido
+- **Árbol Site→Floor, carga de plano y almacén de assets (OZ-9a).**
+  - **DPI honesto**: `FloorPlan.dpi` es `Measured[float]` (ADR-015). El número viaja siempre con su procedencia — `OBSERVED` si vino del archivo (EXIF/pHYs/JFIF), `ESTIMATED` si se asumió 96 —, así un DPI asumido no puede leerse ni mostrarse como medido. La UI lo pinta con doble codificación en texto («del archivo» vs. «asumido (por defecto)»). Migración `0002`.
+  - **Módulo de imagen puro** (`plan_image`): detecta PNG/JPG por **magic bytes** (no por el nombre del archivo), lee dimensiones y DPI de las **cabeceras sin decodificar** el bitmap. Rechazo tipado que **distingue px de bytes** con el valor real; una no-imagen renombrada a `.png` se rechaza, y un formato reconocido pero no soportado (BMP/TIFF/WEBP) lo dice.
+  - **Assets content-addressed** (ADR-015): el plano se embebe como `assets/<sha256>.<ext>`, con la extensión derivada del formato real y **dedup por hash**. Round-trip verificado: los bytes del plano sobreviven guardar y reabrir.
+  - **Árbol de sitios y plantas** con edición (agregar/renombrar/eliminar sitio y planta) y carga del plano. El plano es obligatorio por planta: se crea con su imagen, no a medias. Errores de plano o de edición se muestran sin congelar la ventana; la carga corre en el worker.
+  - Dock lateral con el árbol y un **resumen textual del plano** (dimensiones + DPI con procedencia): hace validable la honestidad del plano sin depender del visor (que llega en OZ-36).
 - **I/O de proyecto en un worker (OZ-34).** Abrir y guardar corren fuera del hilo de Qt (port `TaskExecutor` + adaptador `QtTaskExecutor` sobre `QThreadPool`), con la UI en «Trabajando…» y acciones deshabilitadas mientras corre. Cancelación **lógica**: cerrar o cambiar de proyecto descarta el resultado de una operación obsoleta (y limpia su working dir), sin abortar el I/O a mitad. Prepara la carga de planos grandes (F1.5) sin congelar la ventana.
 - **Shell de proyectos: crear/abrir/guardar/cerrar (OZ-8).**
   - Primera integración real dominio ↔ repositorio SQLite ↔ contenedor `.wifisurvey`: el *glue* que faltaba (deuda de OZ-6/OZ-7). Modelo **documento** (ADR-010): abrir extrae el `.wifisurvey` a un working dir; guardar re-empaqueta **atómico** sobre el archivo (temporal + rename), verificado con un kill-test a nivel del guardado.

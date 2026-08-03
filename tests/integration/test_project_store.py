@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from application.project_service import ProjectErrorKind, ProjectStoreError
+from domain.measurement import Measured, Provenance
 from domain.project import Floor, FloorPlan, Project, Site
 from persistence.container import (
     CONTAINER_FORMAT_VERSION,
@@ -34,7 +35,12 @@ def _store(tmp_path: Path, *, app_version: str = "0.0.3") -> WifiSurveyProjectSt
 
 
 def _proyecto_con_estructura() -> Project:
-    plan = FloorPlan(asset_sha256="a" * 64, width_px=1200, height_px=800, dpi=96.0)
+    plan = FloorPlan(
+        asset_sha256="a" * 64,
+        width_px=1200,
+        height_px=800,
+        dpi=Measured(96.0, Provenance.ESTIMATED),
+    )
     floor = Floor(name="Planta baja", level=0, plan=plan)
     site = Site(name="Sede central", floors=(floor,))
     return Project(name="Estudio de cobertura", sites=(site,))
@@ -67,6 +73,92 @@ def test_round_trip_con_sitios_plantas_y_plano(tmp_path: Path) -> None:
 
     _ws2, recuperado = _store(tmp_path).open(destino)
     assert recuperado == proyecto
+
+
+def _png_falso(marca: bytes) -> bytes:
+    """Bytes con firma PNG válida y un cuerpo variable, para distinguir contenidos."""
+    return b"\x89PNG\r\n\x1a\n" + marca
+
+
+def _proyecto_con_plano(sha: str) -> Project:
+    plan = FloorPlan(
+        asset_sha256=sha,
+        width_px=1200,
+        height_px=800,
+        dpi=Measured(96.0, Provenance.ESTIMATED),
+    )
+    floor = Floor(name="Planta baja", level=0, plan=plan)
+    site = Site(name="Sede central", floors=(floor,))
+    return Project(name="Estudio con plano", sites=(site,))
+
+
+# ------------------------------------------------------------------ assets content-addressed
+
+
+def test_store_asset_devuelve_el_sha256_del_contenido(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    ws = store.create_empty()
+    datos = _png_falso(b"contenido de plano")
+
+    sha = store.store_asset(ws, datos, "png")
+
+    assert sha == hashlib.sha256(datos).hexdigest()
+    # El asset queda en el working dir nombrado por su hash y extensión.
+    assert (ws.working_dir / "assets" / f"{sha}.png").read_bytes() == datos
+    store.discard(ws)
+
+
+def test_store_asset_deduplica_por_hash(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    ws = store.create_empty()
+    datos = _png_falso(b"los mismos bytes")
+
+    sha1 = store.store_asset(ws, datos, "png")
+    sha2 = store.store_asset(ws, datos, "png")
+
+    assert sha1 == sha2
+    archivos = list((ws.working_dir / "assets").iterdir())
+    assert len(archivos) == 1, "el mismo contenido no debe duplicarse en disco"
+    store.discard(ws)
+
+
+def test_read_asset_recupera_los_bytes_por_hash(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    ws = store.create_empty()
+    datos = _png_falso(b"para leer de vuelta")
+
+    sha = store.store_asset(ws, datos, "png")
+
+    assert store.read_asset(ws, sha) == datos
+    store.discard(ws)
+
+
+def test_read_asset_inexistente_es_corrupcion(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    ws = store.create_empty()
+
+    with pytest.raises(ProjectStoreError) as exc:
+        store.read_asset(ws, "b" * 64)
+    assert exc.value.kind is ProjectErrorKind.CORRUPT
+    store.discard(ws)
+
+
+def test_round_trip_del_plano_por_hash(tmp_path: Path) -> None:
+    """El plano viaja embebido: tras guardar y reabrir, sus bytes se recuperan por su hash."""
+    store = _store(tmp_path)
+    destino = tmp_path / "con_plano.wifisurvey"
+    ws = store.create_empty()
+    datos = _png_falso(b"plano real de campo")
+    sha = store.store_asset(ws, datos, "png")
+    proyecto = _proyecto_con_plano(sha)
+
+    store.save(ws, proyecto, destino)
+    store.discard(ws)
+
+    store2 = _store(tmp_path)
+    ws2, recuperado = store2.open(destino)
+    assert recuperado.sites[0].floors[0].plan.asset_sha256 == sha
+    assert store2.read_asset(ws2, sha) == datos, "los bytes del plano deben sobrevivir el viaje"
 
 
 def test_reguardar_tras_editar_persiste_el_cambio(tmp_path: Path) -> None:
