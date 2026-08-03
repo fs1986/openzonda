@@ -1,6 +1,6 @@
 [project]
 name = "openzonda"
-version = "0.0.1"
+version = "0.0.3"
 description = "OpenZonda — site surveys WiFi open source para Windows 10/11"
 readme = "README.md"
 requires-python = ">=3.13"
