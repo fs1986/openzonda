@@ -3,7 +3,7 @@
 **Site surveys WiFi de nivel profesional, open source, para Windows 10/11 — sin hardware propietario.**
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-![Estado](https://img.shields.io/badge/estado-F0%20bootstrap-orange)
+![Estado](https://img.shields.io/badge/estado-F1%20en%20curso-orange)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows%2010%2F11%20x64-informational)
 
 OpenZonda es una aplicación desktop para **survey pasivo, heatmapping y diseño
@@ -103,32 +103,47 @@ Ver el diseño completo en [`docs/design/software-design-v0.2.md`](docs/design/s
 ## Estructura del repositorio
 
 ```
-apps/desktop/          entry point, UI, hooks de packaging
+apps/openzonda/        composition root: cablea adaptadores y lanza la app
+apps/desktop/          UI PySide6 — vistas y ViewModels, nada más
 packages/              domain · application · wifi · rf_engine · geometry
                        heatmap · analytics · reporting · interop · ai · persistence
 native/windows/        adaptador Native Wi-Fi (ctypes)
-docs/design/           documentos fuente (diseño, planes) + ADRs en ADR/
+docs/                  design · sessions · retros · templates
+ADR/                   decisiones de arquitectura, inmutables
 tests/                 unit · integration · rf · fixtures
-packaging/windows/     WiX / MSI per-user
+packaging/             spec de PyInstaller · windows/ con WiX, MSI e icono
+scripts/               verificación local (smoke test del bundle)
 ```
+
+`apps/openzonda` y `apps/desktop` están separados a propósito ([ADR-008](ADR/ADR-008-composition-root.md)):
+el contrato de capas prohíbe que la UI importe infraestructura, y alguien tiene que
+instanciar los adaptadores concretos. Ese alguien es el composition root, y vive fuera de
+la UI para que la prohibición no necesite excepciones.
 
 ## Desarrollo
 
-Requiere [uv](https://docs.astral.sh/uv/) y Python 3.13.
+Requiere [uv](https://docs.astral.sh/uv/). **No necesitas instalar Python**: uv descarga
+la versión correcta (3.13) por su cuenta.
 
 ```bash
-uv sync                                        # entorno + dependencias
+uv sync --locked --group dev --extra ui        # entorno + dependencias
+uv run python -m openzonda                     # ejecutar desde fuentes
 uv run pytest                                  # tests
-uv run pytest tests/rf -q                      # regresión RF (golden files)
 uv run mypy packages/domain packages/rf_engine --strict
 uv run ruff check .
 uv run lint-imports                            # contratos de capas
 ```
 
+La guía completa —construir el bundle y el instalador, verificar una release— está en
+[`BUILD.md`](BUILD.md).
+
 ## Estado
 
-**F0 — bootstrap.** Documentación de diseño, scaffold hexagonal, tooling y CI.
-La hoja de ruta F0–F9 está en [`docs/design/plan-implementacion.md`](docs/design/plan-implementacion.md).
+**F0 completada · F1 en curso.** Existe un instalador MSI funcional, un pipeline de release
+por tag con SBOM y hashes, y el núcleo de dominio con su modelo de procedencia.
+
+La hoja de ruta F0–F9 está en [`docs/design/plan-implementacion.md`](docs/design/plan-implementacion.md),
+y cada sesión de trabajo deja su bitácora en [`docs/sessions/`](docs/sessions/).
 
 ## Licencia
 

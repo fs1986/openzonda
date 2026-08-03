@@ -56,7 +56,7 @@ Dependencias permitidas, verificadas en CI con `import-linter`:
 
 
 
-UI (PySide6) → Application → Domain
+Composition root → UI (PySide6) → Application → Domain
 
 Infrastructure implementa ports del Domain/Application
 
@@ -74,7 +74,19 @@ Infrastructure implementa ports del Domain/Application
 
 Paquetes: `domain/ application/ wifi/ rf\_engine/ geometry/ heatmap/ analytics/
 
-reporting/ interop/ ai/ persistence/` + `native/windows/` + `apps/desktop/`.
+reporting/ interop/ ai/ persistence/` + `native/windows/` + `apps/desktop/`
+
+\+ `apps/openzonda/` (composition root, ADR-008).
+
+
+
+\*\*`apps/openzonda` es el único paquete autorizado a importar infraestructura\*\*
+
+(`persistence`, `wifi`, `windows`). Instancia los adaptadores concretos y los inyecta
+
+en la UI, que los recibe por constructor. Sin ese paquete, el punto de entrada tendría
+
+que vivir dentro de `desktop` y perforaría el contrato de capas.
 
 
 
