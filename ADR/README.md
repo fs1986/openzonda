@@ -22,5 +22,6 @@ ADR" del diseño (§25) y son vinculantes para todos los agentes (ver `CLAUDE.md
 | [011](ADR-011-shell-unica.md) | Shell única con vista central reemplazable | Propuesto |
 | [012](ADR-012-distribucion-per-user.md) | Distribución solo per-user (MSI); portable fuera de alcance | Propuesto |
 | [013](ADR-013-i18n.md) | Internacionalización: español e inglés con QTranslator | Propuesto |
+| [014](ADR-014-cancelacion-logica.md) | Cancelación lógica del I/O de proyecto (no abortar a mitad) | Propuesto |
 
 Para proponer una decisión nueva, copia [`template.md`](template.md).
