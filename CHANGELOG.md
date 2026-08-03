@@ -6,6 +6,14 @@ el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 ## [No publicado]
 
 ### Añadido
+- **Núcleo de dominio de F1 (OZ-5).**
+  - Value objects de unidades con álgebra real: `dBm - dBm → dB` (eso es un SNR), `dBm ± dB → dBm` (atenuar), `dB + dB → dB` (atenuaciones acumuladas). Sumar dos dBm es `TypeError`, porque no significa nada físicamente. Mezclar píxeles con metros, tampoco.
+  - **«No disponible» como tipo de primera clase**: `Unavailable` lleva su motivo y **no tiene atributo `value`**, así que el código que intente leer un número inexistente falla en lugar de inventarlo. `Reading[T] = Measured[T] | Unavailable` obliga a distinguir ambos casos.
+  - Regla de derivación: un valor derivado nunca es más fiable que su entrada menos fiable. Aplicada al SNR — con noise observado es `DERIVED`, **nunca `OBSERVED`**; sin noise es «no disponible», **nunca `0`**, que es el caso normal en Windows.
+  - `Calibration` píxel↔metro que **almacena su incertidumbre**: se deriva de dos clics humanos, y calibrar sobre una distancia larga reduce el error de forma cuantificada.
+  - Entidades frozen `Project`, `Site`, `Floor`, `FloorPlan` y `SurveySession`, con procedencia **por atributo**: en modo continuo la posición es derivada mientras el RSSI sigue siendo observado.
+  - Flags de calidad que anotan sin invalidar (diseño §10.2).
+  - Tests: 44 → 126, con property tests de invariantes de calibración.
 - **F0 — bootstrap del repositorio.**
   - Estructura hexagonal (`packages/`, `apps/desktop`, `native/windows`) según diseño §7.3.
   - Documentación de diseño convertida a Markdown en `docs/design/` (fuente `.docx` en `docs/design/source/`).
