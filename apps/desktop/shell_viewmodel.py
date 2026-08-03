@@ -16,9 +16,20 @@ from collections.abc import Callable
 from enum import Enum, auto
 from pathlib import Path
 
-from application.project_service import ProjectService, ProjectState, ProjectStoreError
+from application.project_service import (
+    ProjectErrorKind,
+    ProjectService,
+    ProjectState,
+    ProjectStoreError,
+)
 
 APP_NAME = "OpenZonda"
+
+_ERROR_TITLES = {
+    ProjectErrorKind.INVALID_PLAN: "No se pudo cargar el plano",
+    ProjectErrorKind.INVALID_EDIT: "No se pudo editar el proyecto",
+}
+_ERROR_TITLE_DEFAULT = "No se pudo abrir el proyecto"
 
 
 class DiscardChoice(Enum):
@@ -77,7 +88,8 @@ class ShellViewModel:
             self._on_changed(state)
 
     def on_error(self, error: ProjectStoreError) -> None:
-        self._show_error("No se pudo abrir el proyecto", error.message)
+        titulo = _ERROR_TITLES.get(error.kind, _ERROR_TITLE_DEFAULT)
+        self._show_error(titulo, error.message)
 
     # --------------------------------------------------------------------- comandos
 

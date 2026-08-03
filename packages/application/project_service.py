@@ -21,15 +21,17 @@ No se aborta el I/O a mitad —eso obligaría a re-tocar el contenedor endurecid
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, replace
 from enum import Enum, auto
 from pathlib import Path
 from typing import Protocol, cast
+from uuid import UUID
 
+from application.plan_image import PlanImageError, read_plan_image
 from application.settings import SettingsRepository
 from application.task_executor import SyncTaskExecutor, TaskExecutor
-from domain.project import Project
+from domain.project import Floor, FloorPlan, Project, Site
 
 DEFAULT_PROJECT_NAME = "Proyecto sin título"
 RECENT_LIMIT = 10
@@ -55,6 +57,8 @@ class ProjectErrorKind(Enum):
     HOSTILE = auto()  # construido para atacar
     NOT_FOUND = auto()  # el archivo ya no existe (reciente roto)
     IO = auto()  # cualquier otro fallo de E/S
+    INVALID_PLAN = auto()  # el archivo de plano no es una imagen válida/aceptable (OZ-9a)
+    INVALID_EDIT = auto()  # una edición del árbol viola una regla de dominio (OZ-9a)
 
 
 class ProjectStoreError(Exception):
@@ -133,6 +137,10 @@ class ProjectState:
     recent: tuple[RecentEntry, ...] = ()
     busy: bool = False
     """Hay una operación de I/O (abrir/guardar) en curso: la UI deshabilita acciones."""
+    project: Project | None = None
+    """El proyecto abierto, para que la vista pinte su árbol Site→Floor y el resumen del
+    plano (OZ-9a). Es `frozen`, así que exponerlo aquí es de solo lectura: la UI no puede
+    mutarlo, solo pedir ediciones al servicio. `None` cuando no hay proyecto."""
 
 
 class ProjectServiceListener(Protocol):
@@ -203,6 +211,7 @@ class ProjectService:
             dirty=actual.dirty if actual else False,
             recent=self._recent_entries(),
             busy=self._pending is not None,
+            project=actual.project if actual else None,
         )
 
     # ------------------------------------------------------------------- operaciones
@@ -268,6 +277,144 @@ class ProjectService:
         actual.dirty = True
         self._emit_state()
 
+    # ------------------------------------------------------------- edición del árbol (OZ-9a)
+
+    def add_site(self, name: str) -> None:
+        """Agrega un sitio al proyecto. Nombre duplicado -> error por listener, sin cambio."""
+        self._apply_edit(lambda p: p.with_changes(sites=(*p.sites, Site(name=name))))
+
+    def rename_site(self, site_id: UUID, name: str) -> None:
+        self._apply_edit(lambda p: _map_site(p, site_id, lambda s: replace(s, name=name)))
+
+    def remove_site(self, site_id: UUID) -> None:
+        self._apply_edit(
+            lambda p: p.with_changes(sites=tuple(s for s in p.sites if s.id != site_id))
+        )
+
+    def rename_floor(self, floor_id: UUID, name: str) -> None:
+        self._apply_edit(lambda p: _map_floor(p, floor_id, lambda f: replace(f, name=name)))
+
+    def remove_floor(self, floor_id: UUID) -> None:
+        self._apply_edit(lambda p: _remove_floor(p, floor_id))
+
+    def add_floor(self, site_id: UUID, name: str, level: int, source: Path) -> None:
+        """Agrega una planta a un sitio cargando su plano desde `source` (imagen PNG/JPG).
+
+        El plano es obligatorio (decisión OZ-9a): la planta y su plano se crean juntos, no
+        existe una planta a medias. La lectura+parseo+almacenado del plano corre en el worker
+        (puede tardar con imágenes grandes); las validaciones baratas (sitio existe, nivel
+        libre, nombre no vacío) se hacen antes de encolar para no dejar un asset huérfano si
+        la edición era inválida de entrada.
+        """
+        self._cargar_plano_async(
+            site_id=site_id, name=name, level=level, floor_id=None, source=Path(source)
+        )
+
+    def set_floor_plan(self, floor_id: UUID, source: Path) -> None:
+        """Reemplaza el plano de una planta existente (cargar un plano nuevo en la planta)."""
+        self._cargar_plano_async(
+            site_id=None, name=None, level=None, floor_id=floor_id, source=Path(source)
+        )
+
+    def _apply_edit(self, mutate: Callable[[Project], Project]) -> None:
+        """Aplica una edición pura del árbol. Si viola una regla de dominio (nombre o nivel
+        duplicado, nombre vacío), emite el error por listener en vez de propagarlo: el slot
+        de Qt no debe morir por una entrada inválida del usuario."""
+        actual = self._require_open()
+        try:
+            nuevo = mutate(actual.project)
+        except ValueError as e:
+            self._emit_error(ProjectStoreError(ProjectErrorKind.INVALID_EDIT, str(e)))
+            return
+        actual.project = nuevo
+        actual.dirty = True
+        self._emit_state()
+
+    def _cargar_plano_async(
+        self,
+        *,
+        site_id: UUID | None,
+        name: str | None,
+        level: int | None,
+        floor_id: UUID | None,
+        source: Path,
+    ) -> None:
+        actual = self._require_open()
+        error = self._validar_carga_de_plano(actual.project, site_id, name, level, floor_id)
+        if error is not None:
+            self._emit_error(ProjectStoreError(ProjectErrorKind.INVALID_EDIT, error))
+            return
+
+        workspace = actual.workspace
+        gen = self._start_async()
+
+        def trabajo() -> object:
+            data = source.read_bytes()
+            imagen = read_plan_image(data)  # lanza PlanImageError si no valida
+            sha = self._store.store_asset(workspace, data, imagen.format.value)
+            return (imagen, sha)
+
+        def hecho(resultado: object) -> None:
+            imagen, sha = cast(tuple[object, str], resultado)
+            if self._is_stale(gen) or self._current is None:
+                return
+            plan = FloorPlan(
+                asset_sha256=sha,
+                width_px=imagen.width_px,  # type: ignore[attr-defined]
+                height_px=imagen.height_px,  # type: ignore[attr-defined]
+                dpi=imagen.dpi,  # type: ignore[attr-defined]
+            )
+            try:
+                nuevo = self._aplicar_plano(
+                    self._current.project, plan, site_id, name, level, floor_id
+                )
+            except ValueError as e:
+                self._async_error(gen, ProjectStoreError(ProjectErrorKind.INVALID_EDIT, str(e)))
+                return
+            self._current.project = nuevo
+            self._current.dirty = True
+            self._finish_async(gen)
+
+        self._executor.submit(trabajo, hecho, lambda e: self._async_error(gen, e))
+
+    @staticmethod
+    def _validar_carga_de_plano(
+        project: Project,
+        site_id: UUID | None,
+        name: str | None,
+        level: int | None,
+        floor_id: UUID | None,
+    ) -> str | None:
+        """Chequeos baratos antes del I/O. Devuelve el mensaje de error o `None` si es válido."""
+        if floor_id is not None:  # reemplazo de plano
+            if _find_floor(project, floor_id) is None:
+                return "La planta que se quiere actualizar ya no existe."
+            return None
+        assert site_id is not None and name is not None and level is not None
+        if not name.strip():
+            return "El nombre de la planta no puede estar vacío."
+        site = _find_site(project, site_id)
+        if site is None:
+            return "El sitio donde se quiere agregar la planta ya no existe."
+        if any(f.level == level for f in site.floors):
+            return f"El sitio ya tiene una planta en el nivel {level}."
+        return None
+
+    @staticmethod
+    def _aplicar_plano(
+        project: Project,
+        plan: FloorPlan,
+        site_id: UUID | None,
+        name: str | None,
+        level: int | None,
+        floor_id: UUID | None,
+    ) -> Project:
+        if floor_id is not None:
+            return _map_floor(project, floor_id, lambda f: replace(f, plan=plan))
+        assert site_id is not None and name is not None and level is not None
+        floor = Floor(name=name, level=level, plan=plan)
+        return _map_site(project, site_id, lambda s: replace(s, floors=(*s.floors, floor)))
+
     # ---------------------------------------------------------------------- internos
 
     def _save_to(self, destination: Path) -> None:
@@ -328,6 +475,9 @@ class ProjectService:
         self._pending = None
         if isinstance(error, ProjectStoreError):
             self._emit_error(error)
+        elif isinstance(error, PlanImageError):
+            # El mensaje ya distingue px/bytes/no-imagen y es apto para el usuario.
+            self._emit_error(ProjectStoreError(ProjectErrorKind.INVALID_PLAN, error.message))
         else:
             self._emit_error(ProjectStoreError(ProjectErrorKind.IO, str(error)))
         self._emit_state()
@@ -377,3 +527,46 @@ class ProjectService:
     def _emit_error(self, error: ProjectStoreError) -> None:
         for listener in self._listeners:
             listener.on_error(error)
+
+
+# ------------------------------------------------- edición pura del árbol (frozen -> frozen)
+#
+# Las entidades son inmutables: "editar" es derivar un árbol nuevo conservando las
+# identidades (`id`) que no cambian. Estas funciones reconstruyen la rama tocada y dejan el
+# resto por referencia; si la reconstrucción viola una regla de dominio (nombre o nivel
+# duplicado), el `__post_init__` de la entidad lanza `ValueError`, que el servicio traduce a
+# un error para el usuario.
+
+
+def _find_site(project: Project, site_id: UUID) -> Site | None:
+    return next((s for s in project.sites if s.id == site_id), None)
+
+
+def _find_floor(project: Project, floor_id: UUID) -> Floor | None:
+    for site in project.sites:
+        floor = next((f for f in site.floors if f.id == floor_id), None)
+        if floor is not None:
+            return floor
+    return None
+
+
+def _map_site(project: Project, site_id: UUID, fn: Callable[[Site], Site]) -> Project:
+    sites = tuple(fn(s) if s.id == site_id else s for s in project.sites)
+    return project.with_changes(sites=sites)
+
+
+def _map_floor(project: Project, floor_id: UUID, fn: Callable[[Floor], Floor]) -> Project:
+    def en_sitio(site: Site) -> Site:
+        if not any(f.id == floor_id for f in site.floors):
+            return site
+        floors = tuple(fn(f) if f.id == floor_id else f for f in site.floors)
+        return replace(site, floors=floors)
+
+    return project.with_changes(sites=tuple(en_sitio(s) for s in project.sites))
+
+
+def _remove_floor(project: Project, floor_id: UUID) -> Project:
+    sites = tuple(
+        replace(s, floors=tuple(f for f in s.floors if f.id != floor_id)) for s in project.sites
+    )
+    return project.with_changes(sites=sites)

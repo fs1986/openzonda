@@ -72,6 +72,7 @@ class StoreFalso:
     def __init__(self, root: Path) -> None:
         self._root = root
         self._n = 0
+        self.assets: dict[str, bytes] = {}
 
     def create_empty(self) -> ProjectWorkspace:
         self._n += 1
@@ -84,6 +85,16 @@ class StoreFalso:
 
     def save(self, workspace: ProjectWorkspace, project: object, destination: Path) -> None:
         pass
+
+    def store_asset(self, workspace: ProjectWorkspace, data: bytes, extension: str) -> str:
+        import hashlib
+
+        sha = hashlib.sha256(data).hexdigest()
+        self.assets[sha] = data
+        return sha
+
+    def read_asset(self, workspace: ProjectWorkspace, sha256: str) -> bytes:
+        return self.assets[sha256]
 
     def discard(self, workspace: ProjectWorkspace) -> None:
         pass
@@ -161,6 +172,52 @@ def test_editar_el_nombre_sin_perder_foco_marca_dirty(qt_app: QApplication, tmp_
 
     assert service.is_dirty is True, "editar el nombre debe marcar dirty aunque no se pierda foco"
     assert ventana.windowTitle().startswith("• ")
+    ventana.close()
+
+
+def _png_minimo() -> bytes:
+    import struct
+    import zlib
+
+    def chunk(tipo: bytes, datos: bytes) -> bytes:
+        crc = zlib.crc32(tipo + datos) & 0xFFFFFFFF
+        return struct.pack(">I", len(datos)) + tipo + datos + struct.pack(">I", crc)
+
+    ihdr = struct.pack(">IIBBBBB", 640, 480, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", ihdr)
+        + chunk(b"IDAT", zlib.compress(b"\x00"))
+        + chunk(b"IEND", b"")
+    )
+
+
+def test_el_dock_del_arbol_muestra_el_resumen_honesto_del_plano(
+    qt_app: QApplication, tmp_path: Path
+) -> None:
+    """Cableado extremo a extremo del dock (OZ-9a): agregar sitio+planta a través del servicio
+    repinta el árbol, y el resumen de la planta muestra el DPI con su procedencia en texto —un
+    PNG sin resolución embebida queda 'asumido', nunca presentado como medido (ADR-006)."""
+    repo = RepositorioFalso()
+    service = ProjectService(StoreFalso(tmp_path / "projects"), repo)
+    ventana = MainWindow(project_service=service, settings_repository=repo, app_version="1.2.3")
+    service.new_project()
+    service.add_site("Sede central")
+    sid = service.state().project.sites[0].id  # type: ignore[union-attr]
+    plano = tmp_path / "planta.png"
+    plano.write_bytes(_png_minimo())
+
+    service.add_floor(sid, "Planta baja", 0, plano)
+
+    arbol = ventana._arbol  # type: ignore[attr-defined]
+    assert arbol._tree.topLevelItemCount() == 1, "el sitio debe aparecer en el árbol"
+    site_item = arbol._tree.topLevelItem(0)
+    assert site_item.childCount() == 1, "la planta debe colgar del sitio"
+
+    arbol._tree.setCurrentItem(site_item.child(0))  # seleccionar la planta
+    resumen = arbol._resumen.text()
+    assert "640 x 480 px" in resumen
+    assert "asumido" in resumen and "del archivo" not in resumen  # DPI honesto
     ventana.close()
 
 
