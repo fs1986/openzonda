@@ -10,11 +10,14 @@ Dentro del bundle no hay metadatos de paquete ni repositorio, así que esta es l
 fuente fiable de versión en tiempo de ejecución.
 """
 
+import re
 import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(SPECPATH).parent
 BUILD_INFO = REPO_ROOT / "apps" / "openzonda" / "_build_info.py"
+ICONO = REPO_ROOT / "packaging" / "windows" / "ico" / "openzonda.ico"
+VERSION_INFO = REPO_ROOT / "build" / "version_info.txt"
 
 
 def resolver_version() -> str:
@@ -36,12 +39,86 @@ def resolver_version() -> str:
     return descripcion.removeprefix("v")
 
 
+def version_numerica(version: str) -> tuple[int, int, int, int]:
+    """Traduce la versión de git a la cuaterna de enteros que exige Windows.
+
+    El recurso VERSIONINFO solo admite números; un `git describe` como
+    "0.0.1-3-gc85ecf9-dirty" no le sirve. Se toman los tres primeros componentes:
+
+        v0.0.1            -> (0, 0, 1, 0)
+        0.0.1-3-gc85ecf9  -> (0, 0, 1, 0)
+        c85ecf9           -> (0, 0, 0, 0)   build de desarrollo
+
+    Se prefiere (0,0,0,0) antes que inventar un número: un ejecutable que declara
+    en sus propiedades una versión que no corresponde a ninguna release es peor que
+    uno que se declara de desarrollo. La cadena exacta sí se conserva en el campo
+    FileVersion, que es texto libre.
+    """
+    coincidencia = re.match(r"^v?(\d+)\.(\d+)\.(\d+)", version)
+    if not coincidencia:
+        return (0, 0, 0, 0)
+    mayor, menor, parche = (int(g) for g in coincidencia.groups())
+    return (mayor, menor, parche, 0)
+
+
+def escribir_version_info(destino: Path, version: str) -> Path:
+    """Genera el recurso VERSIONINFO que Windows muestra en Propiedades → Detalles.
+
+    Sin esto el ejecutable aparece sin nombre de producto ni copyright, y es
+    indistinguible en el Administrador de tareas.
+    """
+    numerica = version_numerica(version)
+    # 040904B0 = inglés (EE. UU.) + Unicode. Es el par de códigos convencional para
+    # aplicaciones que no localizan sus metadatos; los strings en sí son legibles en
+    # ambos idiomas del producto.
+    contenido = f"""# Generado por packaging/openzonda.spec. No editar ni versionar.
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers={numerica},
+    prodvers={numerica},
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0),
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable('040904B0', [
+        StringStruct('CompanyName', 'OpenZonda contributors'),
+        StringStruct('FileDescription', 'OpenZonda - site surveys WiFi'),
+        StringStruct('FileVersion', '{version}'),
+        StringStruct('InternalName', 'OpenZonda'),
+        StringStruct('LegalCopyright',
+                     'Copyright (c) OpenZonda contributors. Apache License 2.0'),
+        StringStruct('OriginalFilename', 'OpenZonda.exe'),
+        StringStruct('ProductName', 'OpenZonda'),
+        StringStruct('ProductVersion', '{version}'),
+      ])
+    ]),
+    VarFileInfo([VarStruct('Translation', [0x0409, 1200])])
+  ]
+)
+"""
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(contenido, encoding="utf-8")
+    return destino
+
+
 VERSION = resolver_version()
 BUILD_INFO.write_text(
     '"""Generado por packaging/openzonda.spec. No editar ni versionar."""\n\n'
     f'VERSION = "{VERSION}"\n',
     encoding="utf-8",
 )
+escribir_version_info(VERSION_INFO, VERSION)
+
+if not ICONO.exists():
+    raise SystemExit(
+        f"Falta el icono en {ICONO}. Está versionado en el repositorio; "
+        "si no aparece, la copia de trabajo está incompleta."
+    )
 
 # Módulos Qt que OpenZonda no usa. Sin estas exclusiones el bundle se va muy por encima
 # del presupuesto de 180 MB del DoD: QtWebEngine por sí solo pesa más de 100 MB.
@@ -128,6 +205,8 @@ exe = EXE(
     strip=False,
     upx=False,
     console=False,
+    icon=str(ICONO),
+    version=str(VERSION_INFO),
 )
 
 coll = COLLECT(

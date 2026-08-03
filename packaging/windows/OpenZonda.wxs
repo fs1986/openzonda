@@ -62,6 +62,14 @@
     <Property Id="ARPHELPLINK" Value="https://github.com/fs1986/openzonda/issues" />
     <Property Id="ARPNOREPAIR" Value="0" />
 
+    <!--
+      Icono en la entrada de "Aplicaciones instaladas". El atajo del menú Inicio no lo
+      necesita: apunta a OpenZonda.exe, que ya lleva el icono incrustado por PyInstaller.
+      Icono PROVISIONAL: se reemplaza cuando exista el logotipo definitivo (OZ-29).
+    -->
+    <Icon Id="OpenZondaIcon" SourceFile="$(var.IconFile)" />
+    <Property Id="ARPPRODUCTICON" Value="OpenZondaIcon" />
+
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="ProgramsFolder" Name="Programs">
         <Directory Id="INSTALLFOLDER" Name="OpenZonda" />
