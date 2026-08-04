@@ -16,10 +16,14 @@ from pathlib import Path
 from uuid import UUID
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPainter, QPixmap
 from PySide6.QtWidgets import (
     QDockWidget,
     QFileDialog,
     QFormLayout,
+    QGraphicsPixmapItem,
+    QGraphicsScene,
+    QGraphicsView,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -37,10 +41,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from application.project_service import ProjectService, ProjectState
+from application.project_service import ProjectService, ProjectState, ProjectStoreError
 from application.settings import SettingsRepository
-from desktop.floorplan_viewmodel import FloorPlanViewModel, NewFloor, plan_summary
+from desktop.floorplan_viewmodel import (
+    FloorPlanViewModel,
+    NewFloor,
+    calibration_summary,
+    plan_summary,
+)
 from desktop.shell_viewmodel import DiscardChoice, ShellViewModel
+from desktop.visor_viewmodel import ActivePlan
 
 DEFAULT_SIZE = (1024, 700)
 PROJECT_FILTER = "Proyectos OpenZonda (*.wifisurvey)"
@@ -84,11 +94,22 @@ class MainWindow(QMainWindow):
             on_open_recent=lambda p: self._vm.request_open(p),
             on_remove_recent=self._vm.request_remove_recent,
         )
-        self._proyecto = _ProyectoView(on_rename=self._vm.request_rename)
+        self._proyecto = _ProyectoView(
+            on_rename=self._vm.request_rename,
+            on_calibrate=self._al_calibrar,
+            on_rotate=self._al_rotar,
+        )
         self._stack = QStackedWidget(self)
         self._stack.addWidget(self._inicio)
         self._stack.addWidget(self._proyecto)
         self.setCentralWidget(self._stack)
+
+        # Disciplina de memoria: solo el pixmap de la planta activa vive (OZ-36). El release
+        # es no-op porque reemplazar el item de la escena ya suelta el pixmap anterior; el
+        # guardián garantiza además que no quede una segunda referencia colgada.
+        self._service = project_service
+        self._plano_activo: ActivePlan[QPixmap] = ActivePlan(self._cargar_pixmap, lambda _pm: None)
+        self._floor_seleccionado: UUID | None = None
 
         self._arbol = _ArbolView(
             on_add_site=self._tree_vm.request_add_site,
@@ -96,6 +117,7 @@ class MainWindow(QMainWindow):
             on_rename=self._al_renombrar_nodo,
             on_remove=self._al_eliminar_nodo,
             on_load_plan=self._tree_vm.request_load_plan,
+            on_floor_selected=self._al_seleccionar_planta,
         )
         self._dock_arbol = QDockWidget("Sitios y plantas", self)
         self._dock_arbol.setObjectName("dockArbol")
@@ -289,6 +311,68 @@ class MainWindow(QMainWindow):
         else:
             self._tree_vm.request_remove_floor(node_id, description)
 
+    # ------------------------------------------------------ visor del plano (OZ-36)
+
+    def _cargar_pixmap(self, sha: str) -> QPixmap:
+        """Loader del `ActivePlan`: bytes del asset -> `QPixmap`. Solo se llama al cambiar de
+        planta (mismo sha no recarga), así que aquí es donde se decodifica el plano."""
+        pixmap = QPixmap()
+        pixmap.loadFromData(self._service.read_asset_by_sha(sha))
+        return pixmap
+
+    def _floor_por_id(self, floor_id: UUID | None):
+        proyecto = self._vm.state.project
+        if floor_id is None or proyecto is None:
+            return None
+        for site in proyecto.sites:
+            for floor in site.floors:
+                if floor.id == floor_id:
+                    return floor
+        return None
+
+    def _al_seleccionar_planta(self, floor_id: UUID | None) -> None:
+        self._floor_seleccionado = floor_id
+        floor = self._floor_por_id(floor_id)
+        if floor is None:
+            self._plano_activo.clear()
+            self._proyecto.limpiar_plano()
+            return
+        try:
+            self._plano_activo.set(floor.plan.asset_sha256)
+        except ProjectStoreError as e:
+            self._plano_activo.clear()
+            self._proyecto.limpiar_plano()
+            self._mostrar_error("No se pudo cargar el plano", e.message)
+            return
+        self._proyecto.mostrar_plano(
+            self._plano_activo.resource,
+            floor.plan.rotation_degrees,
+            calibration_summary(floor.plan),
+        )
+
+    def _al_calibrar(self, first: tuple[float, float], second: tuple[float, float]) -> None:
+        """Recibe los dos puntos (en píxeles de imagen) que el visor capturó; pide la distancia
+        real y persiste la calibración. El error de escala lo calcula el dominio."""
+        if self._floor_seleccionado is None:
+            return
+        metros, ok = QInputDialog.getDouble(
+            self,
+            "Calibrar",
+            "Distancia real entre los dos puntos (metros):",
+            1.0,
+            0.001,
+            100000.0,
+            3,
+        )
+        if not ok:
+            return
+        self._service.set_floor_calibration(self._floor_seleccionado, first, second, metros)
+
+    def _al_rotar(self) -> None:
+        floor = self._floor_por_id(self._floor_seleccionado)
+        if floor is not None:
+            self._service.set_floor_rotation(floor.id, (floor.plan.rotation_degrees + 90.0) % 360.0)
+
     # ---------------------------------------------------------------------- geometría
 
     def _restaurar_geometria(self) -> None:
@@ -378,13 +462,15 @@ class _InicioView(QWidget):
 
 
 class _ProyectoView(QWidget):
-    """Vista central del proyecto abierto: identidad y nombre editable. El árbol Site→Floor y
-    el resumen del plano viven en el dock lateral (`_ArbolView`, OZ-9a)."""
+    """Vista central del proyecto: identidad editable arriba y el visor del plano abajo. El
+    árbol Site→Floor vive en el dock lateral (`_ArbolView`)."""
 
-    def __init__(self, *, on_rename) -> None:
+    def __init__(self, *, on_rename, on_calibrate, on_rotate) -> None:
         super().__init__()
         self._on_rename = on_rename
-        form = QFormLayout(self)
+
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
         self._nombre = QLineEdit()
         # `textEdited` (no `editingFinished`) marca el cambio en el acto: si se usara
         # `editingFinished`, editar el nombre y cerrar con la X sin sacar el foco del campo
@@ -396,11 +482,21 @@ class _ProyectoView(QWidget):
         self._ruta.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         form.addRow("Nombre", self._nombre)
         form.addRow("Archivo", self._ruta)
+        layout.addLayout(form)
+
+        self._visor = _VisorPanel(on_calibrate=on_calibrate, on_rotate=on_rotate)
+        layout.addWidget(self._visor, 1)
 
     def mostrar(self, state: ProjectState) -> None:
         if self._nombre.text() != (state.name or ""):
             self._nombre.setText(state.name or "")
         self._ruta.setText(str(state.path) if state.path else "(sin guardar)")
+
+    def mostrar_plano(self, pixmap: QPixmap | None, rotation: float, calib_text: str) -> None:
+        self._visor.mostrar_plano(pixmap, rotation, calib_text)
+
+    def limpiar_plano(self) -> None:
+        self._visor.limpiar()
 
     def _emitir_rename(self) -> None:
         self._on_rename(self._nombre.text())
@@ -415,13 +511,16 @@ class _ArbolView(QWidget):
     depender del visor, y cumple el doble canal de accesibilidad (nunca solo color).
     """
 
-    def __init__(self, *, on_add_site, on_add_floor, on_rename, on_remove, on_load_plan) -> None:
+    def __init__(
+        self, *, on_add_site, on_add_floor, on_rename, on_remove, on_load_plan, on_floor_selected
+    ) -> None:
         super().__init__()
         self._on_add_site = on_add_site
         self._on_add_floor = on_add_floor
         self._on_rename = on_rename
         self._on_remove = on_remove
         self._on_load_plan = on_load_plan
+        self._on_floor_selected = on_floor_selected
 
         layout = QVBoxLayout(self)
         self._tree = QTreeWidget()
@@ -520,11 +619,13 @@ class _ArbolView(QWidget):
 
     def _al_cambiar_seleccion(self) -> None:
         datos = self._nodo_actual()
-        if datos is not None and datos["kind"] == "floor":
+        es_planta = datos is not None and datos["kind"] == "floor"
+        if es_planta:
             self._resumen.setText(f"Plano: {datos['summary']}")
         else:
             self._resumen.setText("Seleccioná una planta para ver su plano.")
         self._actualizar_botones()
+        self._on_floor_selected(UUID(datos["id"]) if es_planta else None)
 
     def _actualizar_botones(self) -> None:
         datos = self._nodo_actual()
@@ -571,3 +672,123 @@ class _ArbolView(QWidget):
                 hijo = site.child(j)
                 if hijo is not None:  # pragma: no cover
                     yield hijo
+
+
+class _Lienzo(QGraphicsView):
+    """`QGraphicsView` del plano. La escena está en **píxeles de imagen**: el pixmap va en el
+    origen sin escalar ni rotar, así que zoom, pan y rotación viven en la transformación de la
+    *vista* y `mapToScene` los invierte. Por eso los dos puntos de calibración se capturan en
+    coordenadas de imagen, invariantes al zoom con que el usuario los marcó (OZ-36).
+    """
+
+    def __init__(self, on_two_points) -> None:
+        super().__init__()
+        self._on_two_points = on_two_points
+        self._escena = QGraphicsScene(self)
+        self.setScene(self._escena)
+        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)  # pan con arrastre
+        self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        self._rotacion = 0.0
+        self._calibrando = False
+        self._puntos: list[tuple[float, float]] = []
+
+    def mostrar(self, pixmap: QPixmap, rotation: float) -> None:
+        self._escena.clear()
+        item = QGraphicsPixmapItem(pixmap)
+        self._escena.addItem(item)
+        self._escena.setSceneRect(item.boundingRect())  # escena = píxeles de imagen
+        self._rotacion = rotation
+        self.ajustar()
+
+    def limpiar(self) -> None:
+        self._escena.clear()
+        self._cancelar_calibracion()
+
+    def ajustar(self) -> None:
+        """Fit-to-view: encuadra el plano respetando la rotación persistente. No se persiste."""
+        self.resetTransform()
+        self.rotate(self._rotacion)
+        if not self._escena.sceneRect().isEmpty():
+            self.fitInView(self._escena.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+
+    def wheelEvent(self, event) -> None:  # zoom, solo viewport (no se persiste)
+        factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
+        self.scale(factor, factor)
+
+    def iniciar_calibracion(self) -> None:
+        self._calibrando = True
+        self._puntos = []
+        self.setDragMode(QGraphicsView.DragMode.NoDrag)  # los clics marcan puntos, no pan
+        self.setCursor(Qt.CursorShape.CrossCursor)
+
+    def _cancelar_calibracion(self) -> None:
+        self._calibrando = False
+        self._puntos = []
+        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        self.unsetCursor()
+
+    def mousePressEvent(self, event) -> None:
+        if not self._calibrando or event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        p = self.mapToScene(event.position().toPoint())  # -> píxeles de imagen
+        self._puntos.append((p.x(), p.y()))
+        if len(self._puntos) == 2:
+            primero, segundo = self._puntos
+            self._cancelar_calibracion()
+            self._on_two_points(primero, segundo)
+
+
+class _VisorPanel(QWidget):
+    """Panel del visor: el lienzo del plano + acciones (ajustar, rotar, calibrar) + el resumen
+    de escala e incertidumbre **siempre visible** (OZ-36). No renderiza survey ni heatmap."""
+
+    def __init__(self, *, on_calibrate, on_rotate) -> None:
+        super().__init__()
+        self._on_calibrate = on_calibrate
+        self._on_rotate = on_rotate
+
+        layout = QVBoxLayout(self)
+        self._lienzo = _Lienzo(on_two_points=self._al_capturar_puntos)
+        layout.addWidget(self._lienzo, 1)
+
+        acciones = QHBoxLayout()
+        self._btn_ajustar = QPushButton("Ajustar")
+        self._btn_ajustar.clicked.connect(self._lienzo.ajustar)
+        self._btn_rotar = QPushButton("Rotar 90°")
+        self._btn_rotar.clicked.connect(lambda: self._on_rotate())
+        self._btn_calibrar = QPushButton("Calibrar…")
+        self._btn_calibrar.clicked.connect(self._lienzo.iniciar_calibracion)
+        for b in (self._btn_ajustar, self._btn_rotar, self._btn_calibrar):
+            acciones.addWidget(b)
+        acciones.addStretch(1)
+        layout.addLayout(acciones)
+
+        # Escala + incertidumbre: siempre visible, en texto (doble canal). Nunca solo cuando
+        # el error es alto (ADR-006).
+        self._escala = QLabel("Sin planta seleccionada.")
+        self._escala.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self._escala)
+
+        self._habilitar(False)
+
+    def mostrar_plano(self, pixmap: QPixmap | None, rotation: float, calib_text: str) -> None:
+        if pixmap is None or pixmap.isNull():
+            self.limpiar()
+            return
+        self._lienzo.mostrar(pixmap, rotation)
+        self._escala.setText(calib_text)
+        self._habilitar(True)
+
+    def limpiar(self) -> None:
+        self._lienzo.limpiar()
+        self._escala.setText("Sin planta seleccionada.")
+        self._habilitar(False)
+
+    def _al_capturar_puntos(self, first: tuple[float, float], second: tuple[float, float]) -> None:
+        self._on_calibrate(first, second)
+
+    def _habilitar(self, activo: bool) -> None:
+        self._btn_ajustar.setEnabled(activo)
+        self._btn_rotar.setEnabled(activo)
+        self._btn_calibrar.setEnabled(activo)
