@@ -34,8 +34,15 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
+
+# La consola de Windows usa cp1252 por defecto y revienta con →, ±, etc. que aparecen en los
+# resúmenes de las tarjetas. Forzar UTF-8 en la salida evita ese crash.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
 
 DEFAULT_BASE_URL = "https://fs1986.atlassian.net"
 DEFAULT_ENV_FILE = Path.home() / ".openzonda" / "jira.env"
@@ -167,12 +174,35 @@ def cmd_comment(base: str, email: str, token: str, args: list[str]) -> int:
     return 0
 
 
+def cmd_assign(base: str, email: str, token: str, args: list[str]) -> int:
+    """Asigna una tarjeta. `quien` = 'me' (el dueño del token), un email, o un accountId."""
+    clave, quien = args[0], args[1]
+    if quien.lower() == "me":
+        yo = _peticion("GET", _api3(base, "/myself"), email, token)
+        assert isinstance(yo, dict)
+        account_id = yo["accountId"]
+    elif "@" in quien:
+        consulta = urllib.parse.quote(quien)
+        res = _peticion("GET", _api3(base, f"/user/search?query={consulta}"), email, token)
+        if not isinstance(res, list) or not res:
+            raise JiraError(f"No encontré ningún usuario para {quien!r}.")
+        account_id = res[0]["accountId"]
+    else:
+        account_id = quien
+    _peticion(
+        "PUT", _api3(base, f"/issue/{clave}/assignee"), email, token, {"accountId": account_id}
+    )
+    print(f"OK: {clave} asignada a {quien}")
+    return 0
+
+
 _COMANDOS = {
     "whoami": (cmd_whoami, 0),
     "get": (cmd_get, 1),
     "transitions": (cmd_transitions, 1),
     "transition": (cmd_transition, 2),
     "comment": (cmd_comment, 2),
+    "assign": (cmd_assign, 2),
 }
 
 
