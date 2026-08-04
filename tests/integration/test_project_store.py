@@ -161,6 +161,35 @@ def test_round_trip_del_plano_por_hash(tmp_path: Path) -> None:
     assert store2.read_asset(ws2, sha) == datos, "los bytes del plano deben sobrevivir el viaje"
 
 
+def test_save_empaca_solo_los_assets_referenciados(tmp_path: Path) -> None:
+    """Reemplazar el plano de una planta no debe dejar el anterior embebido para siempre.
+
+    `store_asset` deja el asset viejo en el working dir (dedup por contenido, no lo borra); si
+    `save` empacara todo `assets/`, cada reemplazo engordaría el .wifisurvey con planos muertos.
+    `save` empaca solo los `asset_sha256` que el proyecto referencia."""
+    import zipfile
+
+    store = _store(tmp_path)
+    destino = tmp_path / "con_reemplazo.wifisurvey"
+    ws = store.create_empty()
+
+    sha_viejo = store.store_asset(ws, _png_falso(b"plano A, el que se reemplaza"), "png")
+    sha_vigente = store.store_asset(ws, _png_falso(b"plano B, el vigente distinto"), "png")
+    assert sha_viejo != sha_vigente
+    # Ambos assets están en el working dir; el proyecto referencia solo el vigente (como tras
+    # un set_floor_plan que reemplazó A por B).
+    proyecto = _proyecto_con_plano(sha_vigente)
+
+    store.save(ws, proyecto, destino)
+    store.discard(ws)
+
+    with zipfile.ZipFile(destino) as zf:
+        entradas_assets = sorted(n for n in zf.namelist() if n.startswith("assets/"))
+    assert entradas_assets == [f"assets/{sha_vigente}.png"], (
+        f"el contenedor no debe llevar el plano huérfano; entradas: {entradas_assets}"
+    )
+
+
 def test_reguardar_tras_editar_persiste_el_cambio(tmp_path: Path) -> None:
     store = _store(tmp_path)
     destino = tmp_path / "estudio.wifisurvey"
