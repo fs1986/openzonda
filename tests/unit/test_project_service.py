@@ -432,6 +432,65 @@ def test_rename_y_remove_floor(entorno, tmp_path: Path) -> None:
     assert service.state().project.sites[0].floors == ()
 
 
+# ------------------------------------------------ calibración, rotación, bytes (OZ-36)
+
+
+def _planta_con_plano(
+    service: ProjectService, tmp_path: Path, datos: bytes | None = None
+) -> object:
+    """Crea proyecto+sitio+planta con un plano y devuelve el id de la planta."""
+    service.new_project()
+    service.add_site("Sede")
+    sid = service.state().project.sites[0].id
+    plano = tmp_path / "planta.png"
+    plano.write_bytes(datos if datos is not None else _png_valido())
+    service.add_floor(sid, "Baja", 0, plano)
+    return service.state().project.sites[0].floors[0].id
+
+
+def test_set_floor_calibration_deriva_escala_e_incertidumbre(entorno, tmp_path: Path) -> None:
+    service, _store, _listener = entorno
+    fid = _planta_con_plano(service, tmp_path)
+
+    # Dos puntos a 100 px, declarados a 5 m reales -> 0.05 m/px.
+    service.set_floor_calibration(fid, (10.0, 10.0), (110.0, 10.0), 5.0)
+
+    cal = service.state().project.sites[0].floors[0].plan.calibration
+    assert cal is not None
+    assert cal.meters_per_pixel == pytest.approx(0.05)
+    assert cal.pixel_distance == pytest.approx(100.0)
+    assert cal.relative_error == pytest.approx(0.01)  # 1 px de duda sobre 100 px
+    assert service.is_dirty is True
+
+
+def test_set_floor_calibration_puntos_coincidentes_es_invalid_edit(entorno, tmp_path: Path) -> None:
+    service, _store, listener = entorno
+    fid = _planta_con_plano(service, tmp_path)
+
+    service.set_floor_calibration(fid, (50.0, 50.0), (50.0, 50.0), 5.0)  # mismo punto
+
+    assert listener.errors[-1].kind is ProjectErrorKind.INVALID_EDIT
+    assert service.state().project.sites[0].floors[0].plan.calibration is None
+
+
+def test_set_floor_rotation_persiste(entorno, tmp_path: Path) -> None:
+    service, _store, _listener = entorno
+    fid = _planta_con_plano(service, tmp_path)
+
+    service.set_floor_rotation(fid, 90.0)
+
+    assert service.state().project.sites[0].floors[0].plan.rotation_degrees == 90.0
+    assert service.is_dirty is True
+
+
+def test_read_plan_bytes_devuelve_el_asset_de_la_planta(entorno, tmp_path: Path) -> None:
+    service, _store, _listener = entorno
+    datos = _png_valido(b"contenido del plano para renderizar")
+    fid = _planta_con_plano(service, tmp_path, datos=datos)
+
+    assert service.read_plan_bytes(fid) == datos
+
+
 # ---------------------------------------------------------- worker / cancelación (OZ-34)
 
 

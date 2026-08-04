@@ -53,6 +53,23 @@ def plan_summary(plan: FloorPlan) -> str:
     return " · ".join(partes)
 
 
+def calibration_summary(plan: FloorPlan) -> str:
+    """Escala del plano y su incertidumbre, **siempre** ambas (OZ-36).
+
+    La incertidumbre no se muestra solo cuando es alta: un factor de escala sin su error
+    aparenta más exactitud de la que tiene (ADR-006). Una planta sin calibrar lo dice —no un
+    0 falso—; la escala procede de dos clics humanos, y ese margen viaja con ella. Es texto,
+    doble canal de accesibilidad."""
+    cal = plan.calibration
+    if cal is None:
+        return "Sin calibrar — las distancias del plano no tienen escala todavía."
+    return (
+        f"Escala: 1 px = {cal.meters_per_pixel:.4g} m · "
+        f"incertidumbre ±{cal.relative_error * 100:.1f}% "
+        f"(calibrado sobre {cal.real_distance})"
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class NewFloor:
     """Datos que la vista recoge para crear una planta: nombre, nivel y la imagen del plano."""

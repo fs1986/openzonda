@@ -31,7 +31,9 @@ from uuid import UUID
 from application.plan_image import PlanImageError, read_plan_image
 from application.settings import SettingsRepository
 from application.task_executor import SyncTaskExecutor, TaskExecutor
+from domain.calibration import DEFAULT_CLICK_UNCERTAINTY_PX, Calibration
 from domain.project import Floor, FloorPlan, Project, Site
+from domain.units import Meters, Pixels
 
 DEFAULT_PROJECT_NAME = "Proyecto sin título"
 RECENT_LIMIT = 10
@@ -315,6 +317,56 @@ class ProjectService:
         self._cargar_plano_async(
             site_id=None, name=None, level=None, floor_id=floor_id, source=Path(source)
         )
+
+    def set_floor_calibration(
+        self,
+        floor_id: UUID,
+        first: tuple[float, float],
+        second: tuple[float, float],
+        real_distance_m: float,
+        click_uncertainty_px: float = DEFAULT_CLICK_UNCERTAINTY_PX,
+    ) -> None:
+        """Calibra el plano de una planta con dos puntos (en píxeles de imagen) y la distancia
+        real entre ellos. La escala y su incertidumbre las deriva el dominio
+        (`Calibration.from_two_points`); dos puntos coincidentes o una distancia no positiva se
+        emiten como error de edición, no crashean (OZ-36)."""
+
+        def calibrar(f: Floor) -> Floor:
+            cal = Calibration.from_two_points(
+                (Pixels(first[0]), Pixels(first[1])),
+                (Pixels(second[0]), Pixels(second[1])),
+                Meters(real_distance_m),
+                click_uncertainty_px,
+            )
+            return replace(f, plan=replace(f.plan, calibration=cal))
+
+        self._apply_edit(lambda p: _map_floor(p, floor_id, calibrar))
+
+    def set_floor_rotation(self, floor_id: UUID, degrees: float) -> None:
+        """Fija la rotación **persistente** del plano (encuadre no: eso es solo viewport)."""
+        self._apply_edit(
+            lambda p: _map_floor(
+                p, floor_id, lambda f: replace(f, plan=replace(f.plan, rotation_degrees=degrees))
+            )
+        )
+
+    def read_plan_bytes(self, floor_id: UUID) -> bytes:
+        """Devuelve los bytes del plano de una planta, para que el visor arme su pixmap (OZ-36).
+
+        I/O síncrono: lee el asset ya extraído en el working dir (un archivo local acotado a
+        ~50 MB), a diferencia de abrir/guardar que tocan el contenedor entero. Lanza
+        `ProjectStoreError` si la planta o su asset no están."""
+        actual = self._require_open()
+        floor = _find_floor(actual.project, floor_id)
+        if floor is None:
+            raise ProjectStoreError(
+                ProjectErrorKind.INVALID_EDIT, "La planta cuyo plano se pidió ya no existe."
+            )
+        return self.read_asset_by_sha(floor.plan.asset_sha256)
+
+    def read_asset_by_sha(self, sha256: str) -> bytes:
+        """Bytes de un asset por su hash (para el visor, que administra la memoria por sha)."""
+        return self._store.read_asset(self._require_open().workspace, sha256)
 
     def _apply_edit(self, mutate: Callable[[Project], Project]) -> None:
         """Aplica una edición pura del árbol. Si viola una regla de dominio (nombre o nivel

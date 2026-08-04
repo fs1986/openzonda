@@ -14,6 +14,7 @@ from uuid import uuid4
 from desktop.floorplan_viewmodel import (
     FloorPlanViewModel,
     NewFloor,
+    calibration_summary,
     dpi_summary,
     plan_summary,
     provenance_label,
@@ -21,7 +22,7 @@ from desktop.floorplan_viewmodel import (
 from domain.calibration import Calibration
 from domain.measurement import Measured, Provenance
 from domain.project import FloorPlan
-from domain.units import Meters
+from domain.units import Meters, Pixels
 
 # --------------------------------------------------------------- honestidad del resumen
 
@@ -71,6 +72,46 @@ def test_plan_summary_marca_calibrado() -> None:
     )
     assert "calibrado" in plan_summary(plan)
     assert "sin calibrar" not in plan_summary(plan)
+
+
+def _plan_calibrado(pixel_distance: float) -> FloorPlan:
+    cal = Calibration.from_two_points(
+        (Pixels(0.0), Pixels(0.0)),
+        (Pixels(pixel_distance), Pixels(0.0)),
+        Meters(5.0),
+    )
+    return FloorPlan(
+        asset_sha256="a" * 64,
+        width_px=1200,
+        height_px=800,
+        dpi=Measured(96.0, Provenance.OBSERVED),
+        calibration=cal,
+    )
+
+
+def test_calibration_summary_muestra_escala_e_incertidumbre_siempre() -> None:
+    resumen = calibration_summary(_plan_calibrado(100.0))
+    assert "Escala" in resumen
+    assert "1 px = 0.05 m" in resumen  # 5 m / 100 px
+    assert "±1.0%" in resumen  # 1 px de duda sobre 100 px, siempre presente
+
+
+def test_calibration_summary_sin_calibrar_lo_dice_no_un_cero() -> None:
+    plan = FloorPlan(
+        asset_sha256="a" * 64,
+        width_px=1200,
+        height_px=800,
+        dpi=Measured(96.0, Provenance.ESTIMATED),
+    )
+    assert "Sin calibrar" in calibration_summary(plan)
+    assert "±" not in calibration_summary(plan)  # no inventa un margen de una escala inexistente
+
+
+def test_calibrar_sobre_distancia_mas_larga_reduce_la_incertidumbre() -> None:
+    corto = calibration_summary(_plan_calibrado(100.0))
+    largo = calibration_summary(_plan_calibrado(1000.0))
+    assert "±1.0%" in corto
+    assert "±0.1%" in largo  # el mismo píxel de duda pesa menos sobre más distancia
 
 
 # ------------------------------------------------------------------- comandos del árbol
