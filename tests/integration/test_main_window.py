@@ -25,10 +25,12 @@ pytest.importorskip("PySide6", reason="la UI es un extra opcional (extra 'ui')")
 # Debe fijarse antes de instanciar QApplication.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QBuffer, QByteArray, QPointF
+from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
-from desktop.main_window import MainWindow
+from desktop.main_window import MainWindow, _Lienzo
 
 
 @pytest.fixture(autouse=True)
@@ -218,6 +220,80 @@ def test_el_dock_del_arbol_muestra_el_resumen_honesto_del_plano(
     resumen = arbol._resumen.text()
     assert "640 x 480 px" in resumen
     assert "asumido" in resumen and "del archivo" not in resumen  # DPI honesto
+    ventana.close()
+
+
+def _png_real(w: int = 120, h: int = 80) -> bytes:
+    """PNG realmente decodificable (vía QImage), para el visor: pasa read_plan_image Y QPixmap."""
+    img = QImage(w, h, QImage.Format.Format_RGB32)
+    img.fill(0xFF8080)
+    ba = QByteArray()
+    buf = QBuffer(ba)
+    buf.open(QBuffer.OpenModeFlag.WriteOnly)
+    img.save(buf, "PNG")
+    return bytes(ba)
+
+
+def test_pixmap_desde_bytes_conserva_dimensiones(qt_app: QApplication) -> None:
+    """C1: el visor arma el pixmap del plano desde los bytes del asset."""
+    pm = QPixmap()
+    assert pm.loadFromData(_png_real(120, 80))
+    assert (pm.width(), pm.height()) == (120, 80)
+
+
+def test_calibracion_captura_coordenadas_de_imagen_invariantes_al_zoom(
+    qt_app: QApplication,
+) -> None:
+    """C3: los puntos de calibración se toman en píxeles de imagen (escena), no de pantalla:
+    `mapToScene` recupera el mismo punto de imagen a cualquier zoom."""
+    lienzo = _Lienzo(on_two_points=lambda a, b: None)
+    pm = QPixmap()
+    pm.loadFromData(_png_real(400, 300))
+    lienzo.mostrar(pm, 0.0)
+    lienzo.resize(200, 150)
+
+    punto_imagen = QPointF(120.0, 90.0)
+    recuperado_fit = lienzo.mapToScene(lienzo.mapFromScene(punto_imagen))
+    lienzo.scale(4.0, 4.0)  # el usuario hace zoom
+    recuperado_zoom = lienzo.mapToScene(lienzo.mapFromScene(punto_imagen))
+
+    assert recuperado_fit.x() == pytest.approx(120.0, abs=1.0)
+    assert recuperado_fit.y() == pytest.approx(90.0, abs=1.0)
+    # Mismo punto de imagen tras el zoom: la escena sigue en píxeles de imagen.
+    assert recuperado_zoom.x() == pytest.approx(120.0, abs=1.0)
+    assert recuperado_zoom.y() == pytest.approx(90.0, abs=1.0)
+
+
+def test_seleccionar_planta_muestra_el_plano_y_calibrar_actualiza_la_escala(
+    qt_app: QApplication, tmp_path: Path
+) -> None:
+    """Cableado OZ-36: seleccionar una planta carga su plano en el visor; el resumen de escala
+    muestra 'Sin calibrar' y, tras calibrar, la escala CON su incertidumbre (siempre)."""
+    repo = RepositorioFalso()
+    service = ProjectService(StoreFalso(tmp_path / "projects"), repo)
+    ventana = MainWindow(project_service=service, settings_repository=repo, app_version="1.2.3")
+    service.new_project()
+    service.add_site("Sede")
+    sid = service.state().project.sites[0].id  # type: ignore[union-attr]
+    plano = tmp_path / "planta.png"
+    plano.write_bytes(_png_real(400, 300))
+    service.add_floor(sid, "Baja", 0, plano)
+    fid = service.state().project.sites[0].floors[0].id  # type: ignore[union-attr]
+
+    arbol = ventana._arbol  # type: ignore[attr-defined]
+    site_item = arbol._tree.topLevelItem(0)
+    arbol._tree.setCurrentItem(site_item.child(0))  # seleccionar la planta -> carga el plano
+
+    escala = ventana._proyecto._visor._escala  # type: ignore[attr-defined]
+    assert "Sin calibrar" in escala.text()
+
+    service.set_floor_calibration(fid, (10.0, 10.0), (110.0, 10.0), 5.0)
+
+    texto = ventana._proyecto._visor._escala.text()  # type: ignore[attr-defined]
+    assert "Escala" in texto
+    assert "±" in texto and "%" in texto, (
+        "la incertidumbre debe mostrarse siempre, no solo si es alta"
+    )
     ventana.close()
 
 

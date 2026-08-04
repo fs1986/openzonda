@@ -6,6 +6,11 @@ el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 ## [No publicado]
 
 ### Añadido
+- **Visor del plano y calibración de 2 puntos (OZ-36).**
+  - Visor `QGraphicsView` de la planta activa: zoom, pan, fit-to-view y rotación. El encuadre (zoom/pan/fit) es **solo viewport**, no se persiste; solo `rotation_degrees` vive en el modelo (ADR-016).
+  - **Calibración de 2 puntos**: se marcan dos puntos sobre el plano y se declara la distancia real; la escala y su **incertidumbre** las deriva el dominio. Los puntos se capturan en **coordenadas de imagen**, invariantes al zoom con que se marcaron.
+  - **Escala e incertidumbre siempre visibles** en texto (nunca solo cuando el error es alto): un factor de escala sin su margen aparenta más exactitud de la que tiene (ADR-006). Calibrar sobre una distancia más larga reduce el error, y el resumen lo refleja. Sin calibrar lo dice, no un 0 falso.
+  - **Memoria acotada** (ADR-016): solo el pixmap de la planta activa vive (~192 MB en el peor caso, medición de OZ-9a); cambiar de planta libera el anterior. Un solo `QPixmap`, sin tiling/mipmaps — la medición mostró que alcanza para 60 fps.
 - **Árbol Site→Floor, carga de plano y almacén de assets (OZ-9a).**
   - **DPI honesto**: `FloorPlan.dpi` es `Measured[float]` (ADR-015). El número viaja siempre con su procedencia — `OBSERVED` si vino del archivo (EXIF/pHYs/JFIF), `ESTIMATED` si se asumió 96 —, así un DPI asumido no puede leerse ni mostrarse como medido. La UI lo pinta con doble codificación en texto («del archivo» vs. «asumido (por defecto)»). Migración `0002`.
   - **Módulo de imagen puro** (`plan_image`): detecta PNG/JPG por **magic bytes** (no por el nombre del archivo), lee dimensiones y DPI de las **cabeceras sin decodificar** el bitmap. Rechazo tipado que **distingue px de bytes** con el valor real; una no-imagen renombrada a `.png` se rechaza, y un formato reconocido pero no soportado (BMP/TIFF/WEBP) lo dice.
