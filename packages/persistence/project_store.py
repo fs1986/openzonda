@@ -127,7 +127,7 @@ class WifiSurveyProjectStore:
             write_container(
                 destination,
                 database=db,
-                assets=self._recoger_assets(workspace.working_dir),
+                assets=self._recoger_assets(workspace.working_dir, _hashes_referenciados(project)),
                 app_version=self._app_version,
                 schema_version=SCHEMA_VERSION,
                 _before_rename=_before_rename,
@@ -176,16 +176,22 @@ class WifiSurveyProjectStore:
             f"El plano {sha256[:12]}… no está embebido en el proyecto.",
         )
 
-    def _recoger_assets(self, ws_dir: Path) -> dict[str, Path]:
-        """Mapa `nombre -> ruta` de los assets del working dir, para empaquetar. Ignora los
-        temporales de un `store_asset` que muriera a mitad."""
+    def _recoger_assets(self, ws_dir: Path, referenciados: frozenset[str]) -> dict[str, Path]:
+        """Mapa `nombre -> ruta` de los assets del working dir a empaquetar.
+
+        Solo se empacan los assets que el proyecto **referencia** (por `asset_sha256`). Un
+        `set_floor_plan` deja el plano anterior en el working dir sin borrarlo; empacarlo
+        también lo dejaría embebido en el `.wifisurvey` para siempre, engordando el archivo con
+        cada reemplazo. El nombre del archivo es `<sha256>.<ext>`, así que su *stem* es el hash.
+        Se ignoran además los temporales de un `store_asset` que muriera a mitad.
+        """
         assets_dir = ws_dir / ASSETS_DIRNAME
         if not assets_dir.is_dir():
             return {}
         return {
             p.name: p
             for p in sorted(assets_dir.iterdir())
-            if p.is_file() and not p.name.endswith(".tmp")
+            if p.is_file() and not p.name.endswith(".tmp") and p.stem in referenciados
         }
 
     def discard(self, workspace: ProjectWorkspace) -> None:
@@ -260,3 +266,8 @@ class WifiSurveyProjectStore:
         if handle is not None:
             handle.close()
         shutil.rmtree(ws_dir, ignore_errors=True)
+
+
+def _hashes_referenciados(project: Project) -> frozenset[str]:
+    """Los `asset_sha256` que el proyecto usa hoy: los planos de todas sus plantas."""
+    return frozenset(floor.plan.asset_sha256 for site in project.sites for floor in site.floors)
