@@ -17,7 +17,7 @@ def test_los_valores_por_defecto_son_utilizables() -> None:
     settings = AppSettings()
 
     assert settings.schema_version == SETTINGS_SCHEMA_VERSION
-    assert settings.language in {"es", "en"}
+    assert settings.language == "system"  # por defecto se sigue el locale del SO (ADR-013)
     assert settings.log_level == "INFO"
 
 
@@ -33,8 +33,13 @@ def test_se_puede_derivar_una_copia_modificada() -> None:
     derivada = original.with_changes(language="en")
 
     assert derivada.language == "en"
-    assert original.language == "es", "el original no debe mutar"
+    assert original.language == "system", "el original no debe mutar"
     assert derivada.schema_version == original.schema_version
+
+
+def test_acepta_system_es_y_en_como_idioma() -> None:
+    for idioma in ("system", "es", "en"):
+        assert AppSettings(language=idioma).language == idioma
 
 
 def test_rechaza_un_idioma_no_soportado() -> None:

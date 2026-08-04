@@ -88,7 +88,7 @@ class JsonSettingsRepository:
         try:
             return AppSettings(
                 schema_version=SETTINGS_SCHEMA_VERSION,
-                language=datos.get("language", "es"),
+                language=datos.get("language", "system"),
                 log_level=datos.get("log_level", "INFO"),
                 window_geometry=_geometria(datos.get("window_geometry")),
                 recent_projects=_recientes(datos.get("recent_projects")),
