@@ -6,6 +6,10 @@ el proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 ## [No publicado]
 
 ### Añadido
+- **Internacionalización español/inglés (OZ-35).**
+  - i18n real con `QTranslator` (ADR-013): la UI se traduce al inglés y el idioma se elige desde un menú, se persiste y se aplica al reiniciar. **Detección por locale del sistema** con override manual (`AppSettings.language` = `system`/`es`/`en`, esquema v3).
+  - Los textos de usuario pasan por `tr()`/`QCoreApplication.translate` —incluidas las etiquetas de honestidad del plano (procedencia del DPI, escala e incertidumbre)—; sin traductor devuelven el español de origen. Catálogo `openzonda_en.ts` (77 strings) → `.qm`, empaquetado junto al `.exe`.
+  - El español sigue siendo el idioma de origen; el inglés se carga desde su catálogo. Los botones estándar de Qt en español dependen de `qtbase_*.qm` (interino consciente hasta validar en `[HW]`).
 - **Visor del plano y calibración de 2 puntos (OZ-36).**
   - Visor `QGraphicsView` de la planta activa: zoom, pan, fit-to-view y rotación. El encuadre (zoom/pan/fit) es **solo viewport**, no se persiste; solo `rotation_degrees` vive en el modelo (ADR-016).
   - **Calibración de 2 puntos**: se marcan dos puntos sobre el plano y se declara la distancia real; la escala y su **incertidumbre** las deriva el dominio. Los puntos se capturan en **coordenadas de imagen**, invariantes al zoom con que se marcaron.
