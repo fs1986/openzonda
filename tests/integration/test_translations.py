@@ -85,6 +85,30 @@ def test_install_translators_traduce_los_strings_propios(
             qt_app.removeTranslator(t)
 
 
+_REPO_TRANSLATIONS = Path(__file__).resolve().parents[2] / "translations"
+
+
+def test_catalogo_real_en_traduce_los_strings_del_producto(qt_app: QApplication) -> None:
+    """El `openzonda_en.qm` versionado traduce strings reales de la UI (no un fixture).
+
+    Si falla, el `.qm` está desactualizado respecto del `.ts`: regenerar con
+    `uv run python scripts/compile_translations.py`."""
+    if not (_REPO_TRANSLATIONS / "openzonda_en.qm").is_file():
+        pytest.skip("openzonda_en.qm no compilado; correr scripts/compile_translations.py")
+
+    translators = install_translators(qt_app, "en", _REPO_TRANSLATIONS)
+    try:
+        assert QCoreApplication.translate("floorplan", "del archivo") == "from file"
+        assert QCoreApplication.translate("floorplan", "sin calibrar") == "uncalibrated"
+        assert QCoreApplication.translate("MainWindow", "&Nuevo") == "&New"
+        assert QCoreApplication.translate("shell", "No se pudo abrir el proyecto") == (
+            "Could not open the project"
+        )
+    finally:
+        for t in translators:
+            qt_app.removeTranslator(t)
+
+
 def test_install_translators_sin_catalogo_propio_no_falla(
     qt_app: QApplication, tmp_path: Path
 ) -> None:

@@ -1,9 +1,10 @@
 """ViewModel de la shell de proyectos (OZ-8). El estado de UI vive aquí, no en los widgets.
 
-Se prueba **headless**, sin `QApplication`: el ViewModel no importa Qt. Las interacciones que
-sí son de la vista —elegir un archivo, confirmar que se descartan cambios, mostrar un error—
-se inyectan como callbacks, así el flujo (dirty → preguntar → guardar/descartar/cancelar,
-guardar-como cuando no hay ruta, recientes) se verifica sin pantalla.
+Se prueba **headless**, sin `QApplication`: las interacciones que sí son de la vista —elegir
+un archivo, confirmar que se descartan cambios, mostrar un error— se inyectan como callbacks,
+así el flujo (dirty → preguntar → guardar/descartar/cancelar, guardar-como cuando no hay ruta,
+recientes) se verifica sin pantalla. Los títulos de error pasan por `QCoreApplication.translate`
+(OZ-35), que sin traductor devuelve el español de origen: los tests siguen corriendo sin app.
 
 La ventana Qt (`main_window.py`) provee los callbacks reales (`QFileDialog`, `QMessageBox`) y
 se suscribe a `on_changed` para repintarse. Ningún callback bloquea el modelo: cuando el I/O
@@ -16,6 +17,8 @@ from collections.abc import Callable
 from enum import Enum, auto
 from pathlib import Path
 
+from PySide6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication
+
 from application.project_service import (
     ProjectErrorKind,
     ProjectService,
@@ -23,13 +26,15 @@ from application.project_service import (
     ProjectStoreError,
 )
 
-APP_NAME = "OpenZonda"
+APP_NAME = "OpenZonda"  # marca: no se traduce
 
-_ERROR_TITLES = {
-    ProjectErrorKind.INVALID_PLAN: "No se pudo cargar el plano",
-    ProjectErrorKind.INVALID_EDIT: "No se pudo editar el proyecto",
+# Se marcan con QT_TRANSLATE_NOOP (identidad + extracción por lupdate) y se traducen en tiempo
+# de llamada: traducir al importar correría antes de instalar el traductor en el arranque.
+_ERROR_TITLE_SOURCES = {
+    ProjectErrorKind.INVALID_PLAN: QT_TRANSLATE_NOOP("shell", "No se pudo cargar el plano"),
+    ProjectErrorKind.INVALID_EDIT: QT_TRANSLATE_NOOP("shell", "No se pudo editar el proyecto"),
 }
-_ERROR_TITLE_DEFAULT = "No se pudo abrir el proyecto"
+_ERROR_TITLE_DEFAULT = QT_TRANSLATE_NOOP("shell", "No se pudo abrir el proyecto")
 
 
 class DiscardChoice(Enum):
@@ -88,8 +93,8 @@ class ShellViewModel:
             self._on_changed(state)
 
     def on_error(self, error: ProjectStoreError) -> None:
-        titulo = _ERROR_TITLES.get(error.kind, _ERROR_TITLE_DEFAULT)
-        self._show_error(titulo, error.message)
+        fuente = _ERROR_TITLE_SOURCES.get(error.kind, _ERROR_TITLE_DEFAULT)
+        self._show_error(QCoreApplication.translate("shell", fuente), error.message)
 
     # --------------------------------------------------------------------- comandos
 

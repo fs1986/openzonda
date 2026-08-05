@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QTimer
-from PySide6.QtGui import QTranslator
+from PySide6.QtCore import QTimer, QTranslator
 from PySide6.QtWidgets import QApplication
 
 from application.project_service import ProjectService

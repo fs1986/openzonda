@@ -1,10 +1,11 @@
 """ViewModel del árbol Site→Floor y del resumen del plano (OZ-9a).
 
-Se prueba **headless**, sin `QApplication`: el ViewModel no importa Qt. Las interacciones de
-la vista —pedir un nombre, elegir una imagen, confirmar un borrado— se inyectan como
-callbacks, igual que en la shell (`shell_viewmodel`). La vista (`main_window`) provee los
-callbacks reales (`QInputDialog`, `QFileDialog`, `QMessageBox`) y repinta el árbol al recibir
-un `ProjectState` nuevo.
+Se prueba **headless**, sin `QApplication`: las interacciones de la vista —pedir un nombre,
+elegir una imagen, confirmar un borrado— se inyectan como callbacks, igual que en la shell
+(`shell_viewmodel`). Usa `QCoreApplication.translate` para los textos de usuario (OZ-35), que
+sin traductor instalado devuelve el español de origen, así los tests siguen corriendo sin app.
+La vista (`main_window`) provee los callbacks reales (`QInputDialog`, `QFileDialog`,
+`QMessageBox`) y repinta el árbol al recibir un `ProjectState` nuevo.
 
 **Honestidad del DPI en la presentación (ADR-006):** el resumen del plano no muestra el DPI
 como un número pelado. Siempre lo acompaña de su procedencia en *texto* —"del archivo" vs.
@@ -17,28 +18,30 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from uuid import UUID
 
+from PySide6.QtCore import QCoreApplication
+
 from application.project_service import ProjectService
 from domain.measurement import Measured, Provenance
 from domain.project import FloorPlan
 
-_PROVENANCE_LABEL = {
-    Provenance.OBSERVED: "del archivo",
-    Provenance.DERIVED: "derivado",
-    Provenance.ESTIMATED: "asumido",
-    Provenance.PREDICTED: "predicho",
-}
-
 
 def provenance_label(provenance: Provenance) -> str:
     """Etiqueta de texto de una procedencia. Canal no-cromático de la honestidad (ADR-006)."""
-    return _PROVENANCE_LABEL[provenance]
+    # El contexto de translate() debe ser un literal para que lupdate lo extraiga.
+    return {
+        Provenance.OBSERVED: QCoreApplication.translate("floorplan", "del archivo"),
+        Provenance.DERIVED: QCoreApplication.translate("floorplan", "derivado"),
+        Provenance.ESTIMATED: QCoreApplication.translate("floorplan", "asumido"),
+        Provenance.PREDICTED: QCoreApplication.translate("floorplan", "predicho"),
+    }[provenance]
 
 
 def dpi_summary(dpi: Measured[float]) -> str:
     """DPI con su procedencia en texto. Un DPI asumido nunca se muestra como si fuera medido."""
     etiqueta = provenance_label(dpi.provenance)
     if dpi.provenance is Provenance.ESTIMATED:
-        etiqueta += " (por defecto)"
+        por_defecto = QCoreApplication.translate("floorplan", "por defecto")
+        etiqueta = f"{etiqueta} ({por_defecto})"
     return f"{dpi.value:.0f} dpi · {etiqueta}"
 
 
@@ -47,9 +50,12 @@ def plan_summary(plan: FloorPlan) -> str:
     la honestidad del plano en OZ-9a sin depender del visor (OZ-36)."""
     partes = [f"{plan.width_px} x {plan.height_px} px", dpi_summary(plan.dpi)]
     if plan.rotation_degrees:
-        partes.append(f"rotación {plan.rotation_degrees:g}°")
-    estado_cal = "calibrado" if plan.is_calibrated else "sin calibrar"
-    partes.append(estado_cal)
+        rotacion = QCoreApplication.translate("floorplan", "rotación")
+        partes.append(f"{rotacion} {plan.rotation_degrees:g}°")
+    if plan.is_calibrated:
+        partes.append(QCoreApplication.translate("floorplan", "calibrado"))
+    else:
+        partes.append(QCoreApplication.translate("floorplan", "sin calibrar"))
     return " · ".join(partes)
 
 
@@ -62,11 +68,16 @@ def calibration_summary(plan: FloorPlan) -> str:
     doble canal de accesibilidad."""
     cal = plan.calibration
     if cal is None:
-        return "Sin calibrar — las distancias del plano no tienen escala todavía."
-    return (
-        f"Escala: 1 px = {cal.meters_per_pixel:.4g} m · "
-        f"incertidumbre ±{cal.relative_error * 100:.1f}% "
-        f"(calibrado sobre {cal.real_distance})"
+        return QCoreApplication.translate(
+            "floorplan", "Sin calibrar — las distancias del plano no tienen escala todavía."
+        )
+    plantilla = QCoreApplication.translate(
+        "floorplan", "Escala: 1 px = {mpp} m · incertidumbre ±{rel}% (calibrado sobre {dist})"
+    )
+    return plantilla.format(
+        mpp=f"{cal.meters_per_pixel:.4g}",
+        rel=f"{cal.relative_error * 100:.1f}",
+        dist=cal.real_distance,
     )
 
 

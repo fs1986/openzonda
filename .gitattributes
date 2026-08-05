@@ -14,3 +14,4 @@
 *.msi  binary
 *.pyd  binary
 *.dll  binary
+*.qm   binary
