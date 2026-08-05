@@ -15,8 +15,8 @@ from collections.abc import Iterator
 from pathlib import Path
 from uuid import UUID
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPainter, QPixmap
+from PySide6.QtCore import QT_TRANSLATE_NOOP, Qt
+from PySide6.QtGui import QActionGroup, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QDockWidget,
     QFileDialog,
@@ -53,9 +53,11 @@ from desktop.shell_viewmodel import DiscardChoice, ShellViewModel
 from desktop.visor_viewmodel import ActivePlan
 
 DEFAULT_SIZE = (1024, 700)
-PROJECT_FILTER = "Proyectos OpenZonda (*.wifisurvey)"
+# Filtros de diálogo: marcados para extracción (lupdate) en el contexto "MainWindow", que es
+# donde se traducen con self.tr(). El sufijo no es texto de usuario y no se traduce.
+PROJECT_FILTER = QT_TRANSLATE_NOOP("MainWindow", "Proyectos OpenZonda (*.wifisurvey)")
 PROJECT_SUFFIX = ".wifisurvey"
-IMAGE_FILTER = "Imágenes de plano (*.png *.jpg *.jpeg)"
+IMAGE_FILTER = QT_TRANSLATE_NOOP("MainWindow", "Imágenes de plano (*.png *.jpg *.jpeg)")
 _NODE_ROLE = Qt.ItemDataRole.UserRole
 
 
@@ -119,7 +121,7 @@ class MainWindow(QMainWindow):
             on_load_plan=self._tree_vm.request_load_plan,
             on_floor_selected=self._al_seleccionar_planta,
         )
-        self._dock_arbol = QDockWidget("Sitios y plantas", self)
+        self._dock_arbol = QDockWidget(self.tr("Sitios y plantas"), self)
         self._dock_arbol.setObjectName("dockArbol")
         self._dock_arbol.setWidget(self._arbol)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._dock_arbol)
@@ -131,8 +133,8 @@ class MainWindow(QMainWindow):
 
     def _construir_acciones(self) -> None:
         estilo = self.style()
-        barra = self.addToolBar("Proyecto")
-        menu = self.menuBar().addMenu("&Archivo")
+        barra = self.addToolBar(self.tr("Proyecto"))
+        menu = self.menuBar().addMenu(self.tr("&Archivo"))
 
         def accion(texto: str, atajo: str, slot, icono=None, en_barra=False):
             act = menu.addAction(texto)
@@ -145,33 +147,38 @@ class MainWindow(QMainWindow):
             return act
 
         self._act_nuevo = accion(
-            "&Nuevo",
+            self.tr("&Nuevo"),
             "Ctrl+N",
             self._vm.request_new,
             QStyle.StandardPixmap.SP_FileIcon,
             en_barra=True,
         )
         self._act_abrir = accion(
-            "&Abrir…",
+            self.tr("&Abrir…"),
             "Ctrl+O",
             lambda: self._vm.request_open(None),
             QStyle.StandardPixmap.SP_DialogOpenButton,
             en_barra=True,
         )
         self._act_guardar = accion(
-            "&Guardar",
+            self.tr("&Guardar"),
             "Ctrl+S",
             self._vm.request_save,
             QStyle.StandardPixmap.SP_DialogSaveButton,
             en_barra=True,
         )
-        self._act_guardar_como = accion("Guardar &como…", "Ctrl+Shift+S", self._vm.request_save_as)
-        self._act_cerrar = accion("&Cerrar proyecto", "Ctrl+W", self._vm.request_close_project)
-        self._menu_recientes = menu.addMenu("&Recientes")
+        self._act_guardar_como = accion(
+            self.tr("Guardar &como…"), "Ctrl+Shift+S", self._vm.request_save_as
+        )
+        self._act_cerrar = accion(
+            self.tr("&Cerrar proyecto"), "Ctrl+W", self._vm.request_close_project
+        )
+        self._menu_recientes = menu.addMenu(self.tr("&Recientes"))
+        self._construir_menu_idioma()
         menu.addSeparator()
-        accion("&Salir", "Ctrl+Q", self.close)
+        accion(self.tr("&Salir"), "Ctrl+Q", self.close)
 
-        self.statusBar().showMessage("Sin proyecto")
+        self.statusBar().showMessage(self.tr("Sin proyecto"))
 
     # --------------------------------------------------------------- pintado de estado
 
@@ -199,12 +206,12 @@ class MainWindow(QMainWindow):
             self._dock_arbol.setVisible(False)
 
         if ocupado:
-            self.statusBar().showMessage("Trabajando…")
+            self.statusBar().showMessage(self.tr("Trabajando…"))
         elif state.has_project:
-            ruta = str(state.path) if state.path else "(sin guardar)"
+            ruta = str(state.path) if state.path else self.tr("(sin guardar)")
             self.statusBar().showMessage(f"{state.name} — {ruta}")
         else:
-            self.statusBar().showMessage("Sin proyecto")
+            self.statusBar().showMessage(self.tr("Sin proyecto"))
 
         self._inicio.mostrar_recientes(state)
         self._poblar_menu_recientes(state)
@@ -212,13 +219,13 @@ class MainWindow(QMainWindow):
     def _poblar_menu_recientes(self, state: ProjectState) -> None:
         self._menu_recientes.clear()
         if not state.recent:
-            vacio = self._menu_recientes.addAction("(sin proyectos recientes)")
+            vacio = self._menu_recientes.addAction(self.tr("(sin proyectos recientes)"))
             vacio.setEnabled(False)
             return
         for entrada in state.recent:
             etiqueta = entrada.path.name
             if not entrada.available:
-                etiqueta += "  (no disponible)"
+                etiqueta += self.tr("  (no disponible)")
             act = self._menu_recientes.addAction(etiqueta)
             act.setEnabled(entrada.available)
             act.setToolTip(str(entrada.path))
@@ -227,11 +234,15 @@ class MainWindow(QMainWindow):
     # --------------------------------------------------------- interacciones nativas
 
     def _pedir_ruta_abrir(self) -> Path | None:
-        nombre, _ = QFileDialog.getOpenFileName(self, "Abrir proyecto", "", PROJECT_FILTER)
+        nombre, _ = QFileDialog.getOpenFileName(
+            self, self.tr("Abrir proyecto"), "", self.tr(PROJECT_FILTER)
+        )
         return Path(nombre) if nombre else None
 
     def _pedir_ruta_guardar(self) -> Path | None:
-        nombre, _ = QFileDialog.getSaveFileName(self, "Guardar proyecto como", "", PROJECT_FILTER)
+        nombre, _ = QFileDialog.getSaveFileName(
+            self, self.tr("Guardar proyecto como"), "", self.tr(PROJECT_FILTER)
+        )
         if not nombre:
             return None
         ruta = Path(nombre)
@@ -242,9 +253,9 @@ class MainWindow(QMainWindow):
     def _confirmar_descarte(self) -> DiscardChoice:
         caja = QMessageBox(self)
         caja.setIcon(QMessageBox.Icon.Warning)
-        caja.setWindowTitle("Cambios sin guardar")
-        caja.setText("El proyecto tiene cambios sin guardar.")
-        caja.setInformativeText("¿Querés guardarlos antes de continuar?")
+        caja.setWindowTitle(self.tr("Cambios sin guardar"))
+        caja.setText(self.tr("El proyecto tiene cambios sin guardar."))
+        caja.setInformativeText(self.tr("¿Querés guardarlos antes de continuar?"))
         caja.setStandardButtons(
             QMessageBox.StandardButton.Save
             | QMessageBox.StandardButton.Discard
@@ -264,24 +275,34 @@ class MainWindow(QMainWindow):
     # ----------------------------------------------- interacciones del árbol (OZ-9a)
 
     def _pedir_nombre_sitio(self) -> str | None:
-        nombre, ok = QInputDialog.getText(self, "Nuevo sitio", "Nombre del sitio:")
+        nombre, ok = QInputDialog.getText(
+            self, self.tr("Nuevo sitio"), self.tr("Nombre del sitio:")
+        )
         return nombre if ok and nombre.strip() else None
 
     def _pedir_renombre(self, actual: str) -> str | None:
-        nombre, ok = QInputDialog.getText(self, "Renombrar", "Nuevo nombre:", text=actual)
+        nombre, ok = QInputDialog.getText(
+            self, self.tr("Renombrar"), self.tr("Nuevo nombre:"), text=actual
+        )
         return nombre if ok and nombre.strip() else None
 
     def _pedir_imagen(self) -> Path | None:
-        nombre, _ = QFileDialog.getOpenFileName(self, "Elegir plano", "", IMAGE_FILTER)
+        nombre, _ = QFileDialog.getOpenFileName(
+            self, self.tr("Elegir plano"), "", self.tr(IMAGE_FILTER)
+        )
         return Path(nombre) if nombre else None
 
     def _pedir_nueva_planta(self) -> NewFloor | None:
         """Recoge nombre, nivel e imagen de una planta nueva. Cancelar en cualquier paso
         aborta: el plano es obligatorio, así que no se crea una planta a medias (OZ-9a)."""
-        nombre, ok = QInputDialog.getText(self, "Nueva planta", "Nombre de la planta:")
+        nombre, ok = QInputDialog.getText(
+            self, self.tr("Nueva planta"), self.tr("Nombre de la planta:")
+        )
         if not ok or not nombre.strip():
             return None
-        nivel, ok = QInputDialog.getInt(self, "Nueva planta", "Nivel (0 = planta baja):", 0)
+        nivel, ok = QInputDialog.getInt(
+            self, self.tr("Nueva planta"), self.tr("Nivel (0 = planta baja):"), 0
+        )
         if not ok:
             return None
         imagen = self._pedir_imagen()
@@ -292,8 +313,8 @@ class MainWindow(QMainWindow):
     def _confirmar_eliminacion(self, descripcion: str) -> bool:
         respuesta = QMessageBox.question(
             self,
-            "Eliminar",
-            f"¿Eliminar {descripcion}? Esta acción no se puede deshacer.",
+            self.tr("Eliminar"),
+            self.tr("¿Eliminar {que}? Esta acción no se puede deshacer.").format(que=descripcion),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -342,7 +363,7 @@ class MainWindow(QMainWindow):
         except ProjectStoreError as e:
             self._plano_activo.clear()
             self._proyecto.limpiar_plano()
-            self._mostrar_error("No se pudo cargar el plano", e.message)
+            self._mostrar_error(self.tr("No se pudo cargar el plano"), e.message)
             return
         self._proyecto.mostrar_plano(
             self._plano_activo.resource,
@@ -357,8 +378,8 @@ class MainWindow(QMainWindow):
             return
         metros, ok = QInputDialog.getDouble(
             self,
-            "Calibrar",
-            "Distancia real entre los dos puntos (metros):",
+            self.tr("Calibrar"),
+            self.tr("Distancia real entre los dos puntos (metros):"),
             1.0,
             0.001,
             100000.0,
@@ -372,6 +393,37 @@ class MainWindow(QMainWindow):
         floor = self._floor_por_id(self._floor_seleccionado)
         if floor is not None:
             self._service.set_floor_rotation(floor.id, (floor.plan.rotation_degrees + 90.0) % 360.0)
+
+    # ------------------------------------------------------------------- idioma (OZ-35)
+
+    def _construir_menu_idioma(self) -> None:
+        """Menú para elegir el idioma. Persiste la preferencia; aplica al reiniciar (ADR-013)."""
+        menu = self.menuBar().addMenu(self.tr("&Idioma"))
+        actual = self._settings_repository.load().language
+        opciones = (
+            (self.tr("Automático (sistema)"), "system"),
+            (self.tr("Español"), "es"),
+            (self.tr("English"), "en"),
+        )
+        grupo = QActionGroup(self)
+        grupo.setExclusive(True)
+        for etiqueta, codigo in opciones:
+            act = menu.addAction(etiqueta)
+            act.setCheckable(True)
+            act.setChecked(codigo == actual)
+            act.triggered.connect(lambda _=False, c=codigo: self._elegir_idioma(c))
+            grupo.addAction(act)
+
+    def _elegir_idioma(self, codigo: str) -> None:
+        settings = self._settings_repository.load()
+        if settings.language == codigo:
+            return
+        self._settings_repository.save(settings.with_changes(language=codigo))
+        QMessageBox.information(
+            self,
+            self.tr("Idioma"),
+            self.tr("El idioma se aplicará la próxima vez que abras OpenZonda."),
+        )
 
     # ---------------------------------------------------------------------- geometría
 
@@ -406,29 +458,29 @@ class _InicioView(QWidget):
         self._on_remove_recent = on_remove_recent
 
         layout = QVBoxLayout(self)
-        titulo = QLabel("OpenZonda")
+        titulo = QLabel("OpenZonda")  # marca: no se traduce
         titulo.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         layout.addWidget(titulo)
 
         botones = QHBoxLayout()
-        nuevo = QPushButton("Nuevo proyecto")
+        nuevo = QPushButton(self.tr("Nuevo proyecto"))
         nuevo.clicked.connect(on_new)
-        abrir = QPushButton("Abrir proyecto…")
+        abrir = QPushButton(self.tr("Abrir proyecto…"))
         abrir.clicked.connect(on_open)
         botones.addWidget(nuevo)
         botones.addWidget(abrir)
         layout.addLayout(botones)
 
-        layout.addWidget(QLabel("Recientes"))
+        layout.addWidget(QLabel(self.tr("Recientes")))
         self._lista = QListWidget()
         self._lista.itemDoubleClicked.connect(self._abrir_item)
         layout.addWidget(self._lista, 1)
 
-        self._quitar = QPushButton("Quitar de recientes")
+        self._quitar = QPushButton(self.tr("Quitar de recientes"))
         self._quitar.clicked.connect(self._quitar_seleccionado)
         layout.addWidget(self._quitar)
 
-        self._vacio = QLabel("No hay proyectos recientes todavía.")
+        self._vacio = QLabel(self.tr("No hay proyectos recientes todavía."))
         self._vacio.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         layout.addWidget(self._vacio)
 
@@ -437,7 +489,9 @@ class _InicioView(QWidget):
         estilo = self.style()
         for entrada in state.recent:
             texto = (
-                entrada.path.name if entrada.available else f"{entrada.path.name}  —  no disponible"
+                entrada.path.name
+                if entrada.available
+                else self.tr("{nombre}  —  no disponible").format(nombre=entrada.path.name)
             )
             item = QListWidgetItem(texto)
             item.setData(Qt.ItemDataRole.UserRole, str(entrada.path))
@@ -480,8 +534,8 @@ class _ProyectoView(QWidget):
         self._nombre.textEdited.connect(lambda _texto: self._emitir_rename())
         self._ruta = QLabel()
         self._ruta.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        form.addRow("Nombre", self._nombre)
-        form.addRow("Archivo", self._ruta)
+        form.addRow(self.tr("Nombre"), self._nombre)
+        form.addRow(self.tr("Archivo"), self._ruta)
         layout.addLayout(form)
 
         self._visor = _VisorPanel(on_calibrate=on_calibrate, on_rotate=on_rotate)
@@ -490,7 +544,7 @@ class _ProyectoView(QWidget):
     def mostrar(self, state: ProjectState) -> None:
         if self._nombre.text() != (state.name or ""):
             self._nombre.setText(state.name or "")
-        self._ruta.setText(str(state.path) if state.path else "(sin guardar)")
+        self._ruta.setText(str(state.path) if state.path else self.tr("(sin guardar)"))
 
     def mostrar_plano(self, pixmap: QPixmap | None, rotation: float, calib_text: str) -> None:
         self._visor.mostrar_plano(pixmap, rotation, calib_text)
@@ -530,15 +584,15 @@ class _ArbolView(QWidget):
         layout.addWidget(self._tree, 1)
 
         botones = QHBoxLayout()
-        self._btn_sitio = QPushButton("+ Sitio")
+        self._btn_sitio = QPushButton(self.tr("+ Sitio"))
         self._btn_sitio.clicked.connect(lambda: self._on_add_site())
-        self._btn_planta = QPushButton("+ Planta")
+        self._btn_planta = QPushButton(self.tr("+ Planta"))
         self._btn_planta.clicked.connect(self._agregar_planta)
-        self._btn_plano = QPushButton("Cargar plano…")
+        self._btn_plano = QPushButton(self.tr("Cargar plano…"))
         self._btn_plano.clicked.connect(self._cargar_plano)
-        self._btn_renombrar = QPushButton("Renombrar…")
+        self._btn_renombrar = QPushButton(self.tr("Renombrar…"))
         self._btn_renombrar.clicked.connect(self._renombrar)
-        self._btn_eliminar = QPushButton("Eliminar")
+        self._btn_eliminar = QPushButton(self.tr("Eliminar"))
         self._btn_eliminar.clicked.connect(self._eliminar)
         for b in (
             self._btn_sitio,
@@ -550,7 +604,7 @@ class _ArbolView(QWidget):
             botones.addWidget(b)
         layout.addLayout(botones)
 
-        self._resumen = QLabel("Seleccioná una planta para ver su plano.")
+        self._resumen = QLabel(self.tr("Seleccioná una planta para ver su plano."))
         self._resumen.setWordWrap(True)
         self._resumen.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self._resumen)
@@ -567,7 +621,13 @@ class _ArbolView(QWidget):
             s_item = QTreeWidgetItem([site.name])
             s_item.setData(0, _NODE_ROLE, {"kind": "site", "id": str(site.id)})
             for floor in site.floors:
-                f_item = QTreeWidgetItem([f"{floor.name}  ·  nivel {floor.level}"])
+                f_item = QTreeWidgetItem(
+                    [
+                        self.tr("{nombre}  ·  nivel {nivel}").format(
+                            nombre=floor.name, nivel=floor.level
+                        )
+                    ]
+                )
                 f_item.setData(
                     0,
                     _NODE_ROLE,
@@ -612,7 +672,7 @@ class _ArbolView(QWidget):
         datos = self._nodo_actual()
         if datos is None:
             return
-        que = "el sitio" if datos["kind"] == "site" else "la planta"
+        que = self.tr("el sitio") if datos["kind"] == "site" else self.tr("la planta")
         self._on_remove(datos["kind"], UUID(datos["id"]), que)
 
     # -------------------------------------------------------------------- internos
@@ -621,9 +681,9 @@ class _ArbolView(QWidget):
         datos = self._nodo_actual()
         es_planta = datos is not None and datos["kind"] == "floor"
         if es_planta:
-            self._resumen.setText(f"Plano: {datos['summary']}")
+            self._resumen.setText(self.tr("Plano: {resumen}").format(resumen=datos["summary"]))
         else:
-            self._resumen.setText("Seleccioná una planta para ver su plano.")
+            self._resumen.setText(self.tr("Seleccioná una planta para ver su plano."))
         self._actualizar_botones()
         self._on_floor_selected(UUID(datos["id"]) if es_planta else None)
 
@@ -753,11 +813,11 @@ class _VisorPanel(QWidget):
         layout.addWidget(self._lienzo, 1)
 
         acciones = QHBoxLayout()
-        self._btn_ajustar = QPushButton("Ajustar")
+        self._btn_ajustar = QPushButton(self.tr("Ajustar"))
         self._btn_ajustar.clicked.connect(self._lienzo.ajustar)
-        self._btn_rotar = QPushButton("Rotar 90°")
+        self._btn_rotar = QPushButton(self.tr("Rotar 90°"))
         self._btn_rotar.clicked.connect(lambda: self._on_rotate())
-        self._btn_calibrar = QPushButton("Calibrar…")
+        self._btn_calibrar = QPushButton(self.tr("Calibrar…"))
         self._btn_calibrar.clicked.connect(self._lienzo.iniciar_calibracion)
         for b in (self._btn_ajustar, self._btn_rotar, self._btn_calibrar):
             acciones.addWidget(b)
@@ -766,7 +826,7 @@ class _VisorPanel(QWidget):
 
         # Escala + incertidumbre: siempre visible, en texto (doble canal). Nunca solo cuando
         # el error es alto (ADR-006).
-        self._escala = QLabel("Sin planta seleccionada.")
+        self._escala = QLabel(self.tr("Sin planta seleccionada."))
         self._escala.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self._escala)
 
@@ -782,7 +842,7 @@ class _VisorPanel(QWidget):
 
     def limpiar(self) -> None:
         self._lienzo.limpiar()
-        self._escala.setText("Sin planta seleccionada.")
+        self._escala.setText(self.tr("Sin planta seleccionada."))
         self._habilitar(False)
 
     def _al_capturar_puntos(self, first: tuple[float, float], second: tuple[float, float]) -> None:

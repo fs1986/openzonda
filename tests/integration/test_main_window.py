@@ -52,6 +52,12 @@ def sin_dialogos_modales(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: ("", "")), raising=False
     )
+    monkeypatch.setattr(
+        QMessageBox,
+        "information",
+        staticmethod(lambda *a, **k: QMessageBox.StandardButton.Ok),
+        raising=False,
+    )
 
 
 class RepositorioFalso:
@@ -294,6 +300,18 @@ def test_seleccionar_planta_muestra_el_plano_y_calibrar_actualiza_la_escala(
     assert "±" in texto and "%" in texto, (
         "la incertidumbre debe mostrarse siempre, no solo si es alta"
     )
+    ventana.close()
+
+
+def test_elegir_idioma_persiste_la_preferencia(qt_app: QApplication, tmp_path: Path) -> None:
+    """El menú de idioma (OZ-35) persiste la preferencia; se aplica al reiniciar (ADR-013)."""
+    repo = RepositorioFalso()
+    ventana = _ventana(repo, tmp_path)
+
+    ventana._elegir_idioma("en")  # type: ignore[attr-defined]
+
+    assert repo.guardados, "elegir idioma debe persistir los settings"
+    assert repo.guardados[-1].language == "en"
     ventana.close()
 
 

@@ -130,6 +130,7 @@ def main(argv: list[str] | None = None) -> int:
             version,
             argumentos,
             autoclose_ms=_autoclose_ms(argumentos),
+            translations_dir=application_dir() / "translations",
         )
     except Exception:
         logger.exception("OpenZonda terminó por un error no controlado")

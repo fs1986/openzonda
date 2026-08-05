@@ -13,13 +13,21 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Protocol
 
-# v2 (OZ-8): añade `recent_projects`. La migración v1→v2 es aditiva —un settings v1 no trae
-# el campo y se rellena con `()`—, así que preserva todo sin pedir nada al usuario. Un binario
-# v1 que lea un settings v2 lo rechaza por "esquema más nuevo" (JsonSettingsRepository) y el
-# composition root arranca con defaults sin sobrescribir: degrada, no crashea.
-SETTINGS_SCHEMA_VERSION = 2
+# v2 (OZ-8): añade `recent_projects`. v3 (OZ-35): `language` admite el sentinela `"system"`
+# (seguir el locale del SO) y pasa a ser el valor por defecto (ADR-013). Las migraciones son
+# aditivas —un settings más viejo trae un `language` explícito ("es"/"en") que sigue siendo un
+# override válido—, así que preservan todo sin pedirle nada al usuario. Un binario viejo que lea
+# un settings más nuevo lo rechaza por "esquema más nuevo" (JsonSettingsRepository) y arranca con
+# defaults sin sobrescribir: degrada, no crashea.
+SETTINGS_SCHEMA_VERSION = 3
 
 SUPPORTED_LANGUAGES = frozenset({"es", "en"})
+"""Idiomas de UI seleccionables. `"system"` NO está aquí: es un ajuste, no un idioma."""
+
+LANGUAGE_SYSTEM = "system"
+"""Valor de `AppSettings.language` que significa «seguir el locale del sistema» (ADR-013)."""
+
+_VALID_LANGUAGE_SETTINGS = SUPPORTED_LANGUAGES | {LANGUAGE_SYSTEM}
 VALID_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 
 
@@ -28,17 +36,20 @@ class AppSettings:
     """Preferencias de usuario. Inmutable: derivar copias con `with_changes`."""
 
     schema_version: int = SETTINGS_SCHEMA_VERSION
-    language: str = "es"
+    language: str = LANGUAGE_SYSTEM
+    """`"system"` (default, seguir el SO), o `"es"`/`"en"` como override. El idioma *efectivo*
+    lo resuelve `application.i18n.resolve_language`; este campo es la preferencia, no el
+    resultado."""
     log_level: str = "INFO"
     window_geometry: tuple[int, int, int, int] | None = None
     recent_projects: tuple[str, ...] = ()
     """Rutas de proyectos abiertos recientemente, más reciente primero (OZ-8)."""
 
     def __post_init__(self) -> None:
-        if self.language not in SUPPORTED_LANGUAGES:
+        if self.language not in _VALID_LANGUAGE_SETTINGS:
             raise ValueError(
                 f"idioma no soportado: {self.language!r} "
-                f"(soportados: {sorted(SUPPORTED_LANGUAGES)})"
+                f"(válidos: {sorted(_VALID_LANGUAGE_SETTINGS)})"
             )
         if self.log_level not in VALID_LOG_LEVELS:
             raise ValueError(

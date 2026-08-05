@@ -190,6 +190,10 @@ a = Analysis(
             str(REPO_ROOT / "packages" / "persistence" / "migrations" / "*.sql"),
             "persistence/migrations",
         ),
+        # Catálogos de traducción propios (OZ-35). Van junto al .exe, donde
+        # `application_dir()/translations` los busca en runtime. Los `.qm` de Qt
+        # (qtbase_*) los aporta el hook de PySide6.
+        (str(REPO_ROOT / "translations" / "*.qm"), "translations"),
     ],
     hiddenimports=["desktop.app", "desktop.main_window"],
     hookspath=[],
